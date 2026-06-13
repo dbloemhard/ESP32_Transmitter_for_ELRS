@@ -1,4 +1,4 @@
-# ESP32 C2 Simple TX
+# ESP32 C3 Simple TX
 ESP32 C3 Port of the Simple TX Arduino Transmitter project, with a few extra features.
 
 Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an RC transmitter (soft and hardware) that is simple to build, and use.

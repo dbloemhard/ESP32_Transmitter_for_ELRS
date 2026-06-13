@@ -565,9 +565,8 @@ void statusDisplay(){
     }
 
     static uint32_t lastDisplayUpdateTime = 0;
-    if (millis() - lastDisplayUpdateTime >= 50) { // Refresh display at a stable 20Hz rate
+    if (millis() - lastDisplayUpdateTime >= 100) { // Refresh display at a stable 10Hz rate
         lastDisplayUpdateTime = millis();
-        
         switch (currentScreen) {
             case MAIN_PAGE:       
                 // Pass your system state values to the render routine
@@ -577,7 +576,7 @@ void statusDisplay(){
             case ELRS_STATS_PAGE: 
                 updateElrsStatsScreen(elrsLua);
                 break; // Wrap around
-        }
+        }     
     }
 
 }

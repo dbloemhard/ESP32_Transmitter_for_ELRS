@@ -25,14 +25,14 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET    -1
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+extern Adafruit_SSD1306 display;
 
 // Viewport layout boundary definitions matching the 72x40 screen placement
 #define DISPLAY_WIDTH  72
 #define DISPLAY_HEIGHT 40
 
 enum displayState {MAIN_PAGE, ELRS_STATS_PAGE};
-displayState currentScreen = MAIN_PAGE;
+extern displayState currentScreen; 
 
 
 void initDisplay();

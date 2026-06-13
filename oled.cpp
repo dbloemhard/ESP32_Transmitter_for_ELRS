@@ -15,7 +15,9 @@
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
  
- #include "oled.h"
+#include "oled.h"
+displayState currentScreen = MAIN_PAGE;
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 void initDisplay() {
     // Force I2C initialization to use the board's dedicated hardware pins (SDA=5, SCL=6)
@@ -138,3 +140,5 @@ void updateElrsStatsScreen(const ELRSLua& luaInstance) {
 
     display.display();
 }
+
+
