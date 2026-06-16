@@ -29,10 +29,11 @@
 
 #define ANALOG_CUTOFF 150 // cut off lower and upper end to avoid un-symmetric joystick range in trade off resolution
 
+#define AUX_LONG_PRESS 1000   // 1s press for enabling/disabling aux 3
 // Define Reverse 1=reverse
 int Is_Aileron_Reverse  =1;
 int Is_Elevator_Reverse =0;
-int Is_Throttle_Reverse =0;
+int Is_Throttle_Reverse =1;
 int Is_Rudder_Reverse   =0;
 int Is_Arm_Reverse   =0;
 
@@ -42,9 +43,9 @@ int Is_Arm_Reverse   =0;
 
 //----- Voltage monitoring -------------------------
 // Define battery warning voltage
-const float VOLTAGE_SCALE = 436.0;
-const float WARNING_VOLTAGE = 7.4; // 2S Lipo 3.7v per cell
-const float BEEPING_VOLTAGE = 7.0; // 2S Lipo 3.5v per cell
+const float VOLTAGE_SCALE = 454.5;
+const float WARNING_VOLTAGE = 3.7; // 2S Lipo 3.7v per cell
+const float BEEPING_VOLTAGE = 3.5; // 2S Lipo 3.5v per cell
 const float ON_USB = 4.5;          // On USB power / no battery
 
 // Define Commond for start Up Setting

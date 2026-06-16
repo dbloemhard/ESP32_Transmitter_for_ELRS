@@ -134,7 +134,7 @@ void calibrationSave() {
     prefs.putShort("eleMax",  calValues.elevatorMax);
     
     prefs.putShort("thrMin",  calValues.throttleMin);
-    prefs.putShort("thrMid",  calValues.throttleMin);
+    prefs.putShort("thrMid",  calValues.throttleCenter);
     prefs.putShort("thrMax",  calValues.throttleMax);
     
     prefs.putShort("rudMin",  calValues.rudderMin);
@@ -193,7 +193,7 @@ void calibrationChirp(uint8_t times) {
 }
 
 bool calibrationRun() {
-    if (!AUX1_Arm){
+    if (AUX1_Arm){
         Serial.println("Cannot calibrate while arm switch is active");
         cal_reset = 0;
         calibrationRequested = false;
@@ -204,6 +204,7 @@ bool calibrationRun() {
     // Reset variables to "centers"
     while(cal_reset<1){
     Serial.println("Starting Calibration");
+    showCalibrationScreen(1,0);  // OLED display update
     calibrationChirp(2);    // start calibration
     calibrationTimerStart = millis();
     const int centerValue = (1023 - ANALOG_CUTOFF - ANALOG_CUTOFF) / 2;
@@ -241,6 +242,8 @@ bool calibrationRun() {
         val = analogRead(analogInPinRudder);
         calValues.rudderCenter = val;
  
+        showCalibrationScreen(2,((int)(calibrationTimerStart + CALIB_CENT_TMO - currentMillis)/1000)+1);  // OLED display update
+
         Serial.print("Center All Sticks:   Aileron Center:");
         Serial.print(calValues.aileronCenter);
         Serial.print(" Elevator Center:");
@@ -291,6 +294,8 @@ bool calibrationRun() {
             calValues.rudderMax = val;
         }
 
+        showCalibrationScreen(3,((int)(calibrationTimerStart + CALIB_TMO - currentMillis)/1000)+1);  // OLED display update
+
         Serial.print("Move sticks full range: Aileron Min:");
         Serial.print(calValues.aileronMin);
         Serial.print(" Max:");
@@ -314,6 +319,9 @@ bool calibrationRun() {
     else {
         Serial.println("Calibration Done");  
         calibrationSave();
+
+        showCalibrationScreen(4,0);  // OLED display update
+
         cal_reset = 0;
         calibrationRequested = false;
         calibrationChirp(3);    // ok
@@ -350,7 +358,7 @@ void getStickVals() {
     Aileron_value  = mapStick(rawValues.aileron, calValues.aileronMin, calValues.aileronCenter, calValues.aileronMax);
     Elevator_value = mapStick(rawValues.elevator, calValues.elevatorMin, calValues.elevatorCenter, calValues.elevatorMax);
     Throttle_value = mapStick(rawValues.throttle, calValues.throttleMin, calValues.throttleCenter, calValues.throttleMax);
-    Rudder_value   = mapStick(rawValues.throttle, calValues.rudderMin, calValues.rudderCenter, calValues.rudderMax);
+    Rudder_value   = mapStick(rawValues.rudder, calValues.rudderMin, calValues.rudderCenter, calValues.rudderMax);
 
     // 3. Handle reverse
     if (Is_Aileron_Reverse == 1){
@@ -390,16 +398,46 @@ void getAUXInputs(){
      * Handle digital input
      */
 
-    AUX1_Arm = digitalRead(DIGITAL_PIN_SWITCH_ARM);
-    if (Is_Arm_Reverse == 1) {
-      AUX1_Arm = ~AUX1_Arm;
+    static uint32_t aux1PressedTime = 0;
+    if (digitalRead(DIGITAL_PIN_SWITCH_ARM) == LOW) {
+        if (aux1PressedTime == 0)
+            aux1PressedTime = millis(); // Record time button was pressed
+    } else {
+        if (aux1PressedTime> 0) {  // pressStartTime is non-zero
+            unsigned long pressDuration = millis() - aux1PressedTime;
+            aux1PressedTime = 0;
+            if (pressDuration >= AUX_LONG_PRESS) {
+                if (!AUX1_Arm) {
+                    // Not armed, long press - initiate menu? TBD
+                    // this also protects against accidental presses - just hold longer to 'cancel'
+                }
+            } else if (pressDuration >= shortPressDuration) {
+                AUX1_Arm = !AUX1_Arm;
+            }
+        }
     }
 
-    AUX2_value = digitalRead(DIGITAL_PIN_SWITCH_AUX2);
-
-    // Aux Channels
-    rcChannels[AUX1] = (AUX1_Arm == 1)   ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
-    rcChannels[AUX2] = (AUX2_value == 1) ? (CRSF_DIGITAL_CHANNEL_MIN+CRSF_DIGITAL_CHANNEL_MAX)/2 : CRSF_DIGITAL_CHANNEL_MIN;
+    static uint32_t aux2PressedTime = 0;
+    if (digitalRead(DIGITAL_PIN_SWITCH_AUX2) == LOW) {
+        if (aux2PressedTime == 0)
+            aux2PressedTime = millis(); // Record time button was pressed
+    } else {
+        if (aux2PressedTime> 0) {  // pressStartTime is non-zero
+            unsigned long pressDuration = millis() - aux2PressedTime;
+            aux2PressedTime = 0;
+            if (pressDuration >= AUX_LONG_PRESS) {
+                //if (!AUX1_Arm) {
+                   // Not armed, long press - initiate menu? TBD
+                //}
+                AUX3_value = !AUX3_value;
+            } else if (pressDuration >= shortPressDuration) {
+                AUX2_value = !AUX2_value;
+            }
+        }
+    }
+    rcChannels[AUX1] = (AUX1_Arm == 1)   ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
+    rcChannels[AUX2] = (AUX2_value == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
+    rcChannels[AUX3] = (AUX3_value == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
 }
 
 // -----------------------------------------------------------------------------------------------------
@@ -570,8 +608,8 @@ void statusDisplay(){
         switch (currentScreen) {
             case MAIN_PAGE:       
                 // Pass your system state values to the render routine
-                // updateOLEDDisplay(batteryVoltage, crsfClass.linkStats.uplinkLQ, rcChannels);
-                updateHomeScreen(3.8, 99, rcChannels);
+                //updateHomeScreen(3.8, 99, rcChannels);
+                updateHomeScreen(batteryVoltage, crsfClass.telemetryActive,crsfClass.linkStats.uplinkLQ, rcChannels,CRSF_DIGITAL_CHANNEL_MIN,CRSF_DIGITAL_CHANNEL_MAX);
                 break;
             case ELRS_STATS_PAGE: 
                 updateElrsStatsScreen(elrsLua);
@@ -598,8 +636,7 @@ void logData(){
 
         Serial.print("Bat:");
         sprintf(buf, "%5.2f", batteryVoltage);
-        Serial.print(buf);Serial.print(batteryVoltage);
-        Serial.print("v  Channels AETR: ");
+        Serial.print("v Channels AETR: ");
         sprintf(buf, "%5d", rcChannels[AILERON]);
         Serial.print(buf);
         sprintf(buf, "%5d", rcChannels[ELEVATOR]);
@@ -686,6 +723,7 @@ void setup()
     
     // Initialize OLED
     initDisplay();
+    showBootLogo();
 
     // Serial output over USB (Uart6)
     Serial.begin(9600);
@@ -696,7 +734,7 @@ void setup()
 #else
     crsfClass.begin(ELRS_RX, ELRS_TX, false);
 #endif
-
+    delay(3000);
 }
 
 #ifdef TIMINGDEBUG
@@ -736,7 +774,8 @@ void loop()
         calibrationRun();
     else {
         // Read Voltage
-        batteryVoltage = analogRead(VOLTAGE_READ_PIN) / VOLTAGE_SCALE; // 98.5
+        rawValues.voltage = analogRead(VOLTAGE_READ_PIN);
+        batteryVoltage = (float)rawValues.voltage / VOLTAGE_SCALE; // 98.5
 
         // Flash led and use beeper
         statusDisplay();

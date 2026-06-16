@@ -20,7 +20,7 @@
 
 class CRSF;  // Forward Declaration
 
-#define LUADEBUG
+//#define LUADEBUG
 
 #define CRSF_MAX_PACKET_SIZE            64
 #define CRSF_PAYLOAD_SIZE_MAX           60
