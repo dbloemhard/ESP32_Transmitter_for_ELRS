@@ -30,7 +30,7 @@
 #include "oled.h"
 
 //#define DEBUG // if not commented out, Serial.print() is active! For debugging only!!
-//#define TIMINGDEBUG  // When this is active Serial port will print out timing details
+#define TIMINGDEBUG  // When this is active Serial port will print out timing details
 
 //----- global variables for inputs -------------------
 int Aileron_value = 0; // values read from the pot
@@ -738,12 +738,17 @@ void setup()
 }
 
 #ifdef TIMINGDEBUG
+uint32_t startLoopUs = 0;
 uint32_t loopCounter = 0;
 uint32_t maxLoopTime = 0;
-uint32_t minLoopTime = 0;
+uint32_t minLoopTime = 999999;
 // uint32_t totLoopTime = 0;
 uint32_t maxElrsTime = 0;
-uint32_t minElrsTime = 0;
+uint32_t minElrsTime = 999999;
+uint32_t maxOledTime = 0;
+uint32_t minOledTime = 999999;
+uint32_t cumOledTime = 0;
+uint32_t cntOledRuns = 0;
 // uint32_t totElrsTime = 0;
 // uint32_t elrsCounter = 0;
 uint32_t lastStatsPrintTime = 0;
@@ -763,7 +768,8 @@ void loop()
     if (nextLogTimeUs = 0) nextLogTimeUs = nowUs + 4000;
     loopCounter++;
     if (nowUs >= nextLogTimeUs) {
-    uint32_t startLoopUs = micros();
+        startLoopUs = micros();
+    }
 #endif
     // Check for long press of the boot button (and set calibration flag)
     checkButtonPress();
@@ -777,9 +783,17 @@ void loop()
         rawValues.voltage = analogRead(VOLTAGE_READ_PIN);
         batteryVoltage = (float)rawValues.voltage / VOLTAGE_SCALE; // 98.5
 
-        // Flash led and use beeper
+#ifdef TIMINGDEBUG
+        uint32_t oledStartTime = micros();
+#endif        // Flash led and use beeper
         statusDisplay();
-
+#ifdef TIMINGDEBUG
+            uint32_t oledTime = micros() - oledStartTime;
+            if (oledTime > maxOledTime) maxOledTime = oledTime;
+            if (oledTime < minOledTime) minOledTime = oledTime;
+            cumOledTime += oledTime;
+            cntOledRuns++;
+#endif
         // Get the gimbal stick values
         getStickVals();
 
@@ -819,7 +833,7 @@ void loop()
 #ifdef TIMINGDEBUG
             uint32_t elrsTime = micros() - currentMicros;
             if (elrsTime > maxElrsTime) maxElrsTime = elrsTime;
-            if ((elrsTime < minElrsTime) || minLoopTime == 0) minElrsTime = elrsTime;
+            if (elrsTime < minElrsTime) minElrsTime = elrsTime;
 #endif
             uint32_t adjustment = crsfClass.crsfNextInterval();
             crsfTime = currentMicros + adjustment; //CRSF_TIME_BETWEEN_FRAMES_US;
@@ -834,12 +848,13 @@ void loop()
         }
     } // Not calibrating
 #ifdef TIMINGDEBUG
-    uint32_t elapsedUs = micros() - startLoopUs;
-    if (elapsedUs > maxLoopTime) maxLoopTime = elapsedUs;
-    if ((elapsedUs < minLoopTime) || minLoopTime == 0) minLoopTime = elapsedUs;
-    totalTransmitFrames++;
-    // Push the target grid perfectly forward by 4000us (prevents error drift)
-    nextLogTimeUs += 4000; 
+    if (nowUs >= nextLogTimeUs) {
+        uint32_t elapsedUs = micros() - startLoopUs;
+        if (elapsedUs > maxLoopTime) maxLoopTime = elapsedUs;
+        if (elapsedUs < minLoopTime) minLoopTime = elapsedUs;
+        totalTransmitFrames++;
+
+        nextLogTimeUs += 4000; 
     }
     // ---------------------------------------------------------------------------
     if (millis() - lastStatsPrintTime > 5000) {
@@ -850,6 +865,10 @@ void loop()
         Serial.print("Min Loop Duration : "); Serial.print(minLoopTime); Serial.println(" microseconds");
         Serial.print("Avg Loop Duration : "); Serial.print(5000000/totalTransmitFrames); Serial.println(" microseconds");
         Serial.print("Total Transmit Frames   : "); Serial.println(totalTransmitFrames);
+        Serial.print("Max OLED Duration : "); Serial.print(maxOledTime); Serial.println(" microseconds");
+        Serial.print("Min OLED Duration : "); Serial.print(minOledTime); Serial.println(" microseconds");
+        Serial.print("Avg OLED Duration : "); Serial.print(cumOledTime/cntOledRuns); Serial.println(" microseconds");
+        Serial.print("Total ELRS Frames   : "); Serial.println(loopCount);
         Serial.print("Max ELRS Duration : "); Serial.print(maxElrsTime); Serial.println(" microseconds");
         Serial.print("Min ELRS Duration : "); Serial.print(minElrsTime); Serial.println(" microseconds");
         Serial.print("Avg ELRS Duration : "); Serial.print(5000000/loopCount); Serial.println(" microseconds");
