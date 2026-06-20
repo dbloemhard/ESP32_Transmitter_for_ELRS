@@ -17,6 +17,7 @@
  
 #include "oled.h"
 displayState currentScreen = MAIN_PAGE;
+displayState lastScreen;
 // Instantiate the U8g2 object. (Rotation R0, No reset pin, SCL pin 6, SDA pin 5)
 U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 6, /* data=*/ 5);
 
@@ -55,6 +56,11 @@ void showBootLogo() {
     display.sendBuffer();     
 }
 
+void clearScreen() {
+    display.clearBuffer();          // Clear the display internal ram memory
+    display.sendBuffer(); 
+}
+
 void nextScreen() {
     switch (currentScreen) {
         case MAIN_PAGE:       currentScreen = ELRS_STATS_PAGE; break;
@@ -62,32 +68,45 @@ void nextScreen() {
     }
 }
 
-void updateHomeScreen(float voltage, bool telemetryActive, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
-    display.clearBuffer();
+
+void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
+    static int lastVoltageX10 = 0;
+    static int lastTelemetryState = -1;
+    static int lastBars = 0;
+    static int16_t lastAux1 = -1;
+    static int16_t lastAux2 = -1;
+    static int16_t lastAux3 = -1;
+
+#ifdef TIMINGDEBUG
+    uint32_t processTime;
+    uint32_t transmitTime;
+    uint32_t startTime = micros();
+#endif
+    // Clear only the top half (this is all that will be sent)
+    display.setDrawColor(0);
+    display.drawBox(OLED_X_OFFSET, OLED_Y_OFFSET, 72, 17);
+
     // Ensure draw color is set to white/on
     display.setDrawColor(1);
 
     // ==========================================
     // 1. TOP LEFT QUADRANT: LARGE VOLTAGE TEXT
     // ==========================================
-    // Switch to a tall numerical font (~16px high) to act as size 2
+    // Tall numerical font (~16px high)
     display.setFont(u8g2_font_logisoso16_tf); 
-    
-    // U8g2 positions strings from the bottom baseline. Y coordinate adjusted down +14.
     display.setCursor(6 + OLED_X_OFFSET, 16 + OLED_Y_OFFSET);
     display.print(voltage, 1);
     
-    // Smaller 'v' to fit neatly next to the large numbers
-    //display.setFont(u8g2_font_04b_03_tr); // Back to a tiny font (~5px baseline)
-    display.setFont(u8g2_font_tiny5duo_tf); // Back to a tiny font (~5px baseline)
-    display.setCursor(display.getCursorX()+2, 10 + OLED_Y_OFFSET); // Maintain horizontal progression
+    // Smaller 'v' 
+    display.setFont(u8g2_font_tiny5duo_tf); 
+    display.setCursor(display.getCursorX()+2, 10 + OLED_Y_OFFSET);
     display.print("v");
 
     // ==========================================
     // 2. TOP RIGHT QUADRANT: LARGE SIGNAL BARS
     // ==========================================
-    if (telemetryActive) {
-        uint8_t bars = 0;
+    uint8_t bars = 0;
+    if (telemetryState == 1 || telemetryState == 3) {
         if (uplinkLQ > 75) bars = 4;
         else if (uplinkLQ > 50) bars = 3;
         else if (uplinkLQ > 25) bars = 2;
@@ -98,12 +117,42 @@ void updateHomeScreen(float voltage, bool telemetryActive, uint8_t uplinkLQ, int
         if (bars >= 2) display.drawBox(52 + OLED_X_OFFSET, 8 + OLED_Y_OFFSET,  3, 6);   // Bar 2
         if (bars >= 3) display.drawBox(59 + OLED_X_OFFSET, 4 + OLED_Y_OFFSET,  3, 10);  // Bar 3
         if (bars >= 4) display.drawBox(66 + OLED_X_OFFSET, 0 + OLED_Y_OFFSET,  3, 14);  // Bar 4 (Tallest)
-    }
-    else {
+    } else if (telemetryState == 0 || telemetryState == 2) {
         display.drawBox(47 + OLED_X_OFFSET, 6 + OLED_Y_OFFSET, 8, 2); // display -- to indicate not connected
         display.drawBox(59 + OLED_X_OFFSET, 6 + OLED_Y_OFFSET, 8, 2);
         // tbd display NC when ELRS module not detected
+    } else if (telemetryState == 5) { // Bluetooth Joystick mode
+        // Draw bluetooth logo
     }
+    if (telemetryState == 2 || telemetryState == 3) { // Bluetooth transmitter mode
+        // Draw small bluetooth logo in top-left of ELRS signal area
+        display.drawXBM(45 + OLED_X_OFFSET, 0 + OLED_Y_OFFSET, 8, 10, bt_logo_8x10);
+    }
+    uint8_t tileX = 0;
+    uint8_t tileY = 0;
+    uint8_t tileW = 9;
+    uint8_t tileH = 2;
+
+    if ((int)(voltage*10)==lastVoltageX10 && currentScreen == lastScreen) {
+        // Dont write the voltage section if it hasnt changed
+        tileX = 4;
+        tileW = 5;
+    }
+    if (lastBars == bars && telemetryState == lastTelemetryState && currentScreen == lastScreen){
+        // Dont write the bars/connection state if it hasnt changed
+        tileW -= 5;
+    } 
+#ifdef TIMINGDEBUG
+    processTime = micros() - startTime;
+#endif
+    if (tileW > 0) display.updateDisplayArea(tileX,tileY,tileW,tileH);
+#ifdef TIMINGDEBUG
+    transmitTime = micros() - (startTime + processTime);
+    Serial.print("Top Half Process Time: "); Serial.print(processTime); Serial.print("uS. Send time: "); Serial.print(transmitTime); Serial.println("uS.");
+#endif
+    lastVoltageX10 = voltage*10;
+    lastBars = bars;
+    lastTelemetryState = telemetryState;
 
     // ==========================================
     // 2. CENTER ROW: GIMBAL STICK CROSSHAIR BOXES
@@ -112,8 +161,14 @@ void updateHomeScreen(float voltage, bool telemetryActive, uint8_t uplinkLQ, int
     const uint8_t leftBoxX = 12;
     const uint8_t rightBoxX = 40;
     const uint8_t boxesY = 18;
-    
-    // Format: drawFrame(X, Y, Width, Height) maps directly to old drawRect
+
+    // Fast erase background box area
+    display.setDrawColor(0);
+    display.drawBox(0+OLED_X_OFFSET, 17+OLED_Y_OFFSET, 72, 22); 
+    // Ensure draw color is set to white/on
+    display.setDrawColor(1);
+
+    // Format: drawFrame(X, Y, Width, Height)
     display.drawFrame(leftBoxX + OLED_X_OFFSET, boxesY + OLED_Y_OFFSET, boxSize, boxSize);
     display.drawFrame(rightBoxX + OLED_X_OFFSET, boxesY + OLED_Y_OFFSET, boxSize, boxSize);
     
@@ -146,8 +201,31 @@ void updateHomeScreen(float voltage, bool telemetryActive, uint8_t uplinkLQ, int
     uint8_t aux3Y = map(channels[6], minChannelValue, maxChannelValue, 36, 28); // AUX 2
     display.drawBox(66 + OLED_X_OFFSET, aux3Y + OLED_Y_OFFSET, 5, 3);
 
-    // Send the frame buffer to the physical screen hardware
-    display.sendBuffer();
+    // Send the partial display buffer to the physical screen hardware
+    tileX = 0;
+    tileY = 2;
+    tileW = 9;
+    tileH = 3;
+    if (channels[4]==lastAux1 && currentScreen == lastScreen) { // dont send the left most tiles if aux1 didnt change
+        tileX += 1;
+        tileW -= 1;
+    }
+    if (channels[5]==lastAux2 && channels[6]==lastAux3 && currentScreen == lastScreen) tileW -= 1; // dont send the right most tiles if aux2 or 3 didnt change
+
+#ifdef TIMINGDEBUG
+    processTime = micros() - startTime;
+#endif
+    display.updateDisplayArea(tileX,tileY,tileW,tileH);
+#ifdef TIMINGDEBUG
+    transmitTime = micros() - (startTime + processTime);
+
+    Serial.print("Stick Pos Process Time: "); Serial.print(processTime); Serial.print("uS. Send time: "); Serial.print(transmitTime); Serial.println("uS.");
+#endif
+
+    lastAux1 = channels[4];
+    lastAux2 = channels[5];
+    lastAux3 = channels[6];
+    lastScreen = currentScreen;
 }
 
 void updateElrsStatsScreen(const ELRSLua& luaInstance) {
@@ -177,7 +255,8 @@ void updateElrsStatsScreen(const ELRSLua& luaInstance) {
       
     // Send local RAM buffer to the physical display
     display.sendBuffer();
-    
+    lastScreen = currentScreen;
+
 }
 
 void displayMessage(char title[], char line1[], char line2[]) {

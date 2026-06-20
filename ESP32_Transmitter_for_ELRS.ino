@@ -583,6 +583,7 @@ void blinkLED(int ledPin, uint16_t blinkRate) {
     }
 }
 
+
 // Flash Led and play buzzer depending on current state
 void statusDisplay(){
     if (batteryVoltage < WARNING_VOLTAGE && batteryVoltage >= BEEPING_VOLTAGE) {
@@ -602,21 +603,40 @@ void statusDisplay(){
         playTone(5);
     }
 
-    static uint32_t lastDisplayUpdateTime = 0;
-    if (millis() - lastDisplayUpdateTime >= 100) { // Refresh display at a stable 10Hz rate
-        lastDisplayUpdateTime = millis();
+    int connectionState = 0;
+    uint32_t currentTime = millis();
+    static uint32_t lastScreenUpdateTime = 0;
+    uint16_t screenUpdateTime = (AUX1_Arm == 1)? 500 : 100; // 2hz while armed, 10hz while disarmed
+    if (currentTime - lastScreenUpdateTime >= screenUpdateTime) { 
+        lastScreenUpdateTime = currentTime;
         switch (currentScreen) {
             case MAIN_PAGE:       
-                // Pass your system state values to the render routine
-                //updateHomeScreen(3.8, 99, rcChannels);
-                updateHomeScreen(batteryVoltage, crsfClass.telemetryActive,crsfClass.linkStats.uplinkLQ, rcChannels,CRSF_DIGITAL_CHANNEL_MIN,CRSF_DIGITAL_CHANNEL_MAX);
+                // 0 = ELRS not connected, 1 = Telemetry Active, 2 = BT Transmitter mode ELRS not connected, 3 = BT Transmitter mode ELRS connected, 4 = BT Joystick mode
+                connectionState = (crsfClass.telemetryActive) ? 1 : 0;
+                // connectionState += (btTransmitterActive) ? 2 : 0
+                // connectionState = (btJoystickModeActive) ? 4 : connectionState
+                updateHomeScreen(batteryVoltage, connectionState, crsfClass.linkStats.uplinkLQ, rcChannels,CRSF_DIGITAL_CHANNEL_MIN,CRSF_DIGITAL_CHANNEL_MAX);
                 break;
             case ELRS_STATS_PAGE: 
                 updateElrsStatsScreen(elrsLua);
-                break; // Wrap around
+                break; 
+            // case ELRS_MENU: 
+            //     updateElrsStatsScreen(elrsLua);
+            //     break; 
+            // case CHANNEL_OUTPUTS: 
+            //     updateElrsStatsScreen(elrsLua);
+            //     break;
+            // case CHANNEL_MENU: 
+            //     updateElrsStatsScreen(elrsLua);
+            //     break; 
+            // case BT_JOYSTICK: 
+            //     updateBtJoystickScreen(elrsLua);
+            //     break;
+            // case BT_TRANSMITTER: 
+            //     updateBtTxScreen(elrsLua);
+            //     break;
         }     
     }
-
 }
 
 void logData(){
@@ -742,13 +762,13 @@ uint32_t startLoopUs = 0;
 uint32_t loopCounter = 0;
 uint32_t maxLoopTime = 0;
 uint32_t minLoopTime = 999999;
-// uint32_t totLoopTime = 0;
-uint32_t maxElrsTime = 0;
-uint32_t minElrsTime = 999999;
 uint32_t maxOledTime = 0;
 uint32_t minOledTime = 999999;
 uint32_t cumOledTime = 0;
 uint32_t cntOledRuns = 0;
+// uint32_t totLoopTime = 0;
+uint32_t maxElrsTime = 0;
+uint32_t minElrsTime = 999999;
 // uint32_t totElrsTime = 0;
 // uint32_t elrsCounter = 0;
 uint32_t lastStatsPrintTime = 0;
@@ -858,8 +878,7 @@ void loop()
     }
     // ---------------------------------------------------------------------------
     if (millis() - lastStatsPrintTime > 5000) {
-        lastStatsPrintTime = millis();
-        
+        lastStatsPrintTime = millis();      
         Serial.println("\n============ [HANDSET PERFORMANCE METRICS] ============");
         Serial.print("Max Loop Duration : "); Serial.print(maxLoopTime); Serial.println(" microseconds");
         Serial.print("Min Loop Duration : "); Serial.print(minLoopTime); Serial.println(" microseconds");

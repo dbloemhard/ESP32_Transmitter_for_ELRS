@@ -1,7 +1,7 @@
 #pragma once
 #ifndef OLED_H
 #define OLED_H
-#endif
+//#define TIMINGDEBUG
 /*
  * This file is part of ESP32C3-TX
  *
@@ -19,8 +19,6 @@
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <Wire.h>
-//#include <Adafruit_GFX.h>
-//#include <Adafruit_SSD1306.h>
 #include "elrsLua.h"
 #include <U8g2lib.h>
 
@@ -33,11 +31,12 @@ const int OLED_Y_OFFSET = 0; //12; // Adjusted to shift the 40px matrix vertical
 
 enum displayState {MAIN_PAGE, ELRS_STATS_PAGE};
 extern displayState currentScreen; 
-
+extern displayState lastScreen;
 
 void initDisplay();
 void showBootLogo();
-void updateHomeScreen(float voltage, bool telemetryActive, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue);
+void clearScreen();
+void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue);
 void updateElrsStatsScreen(const ELRSLua& luaInstance);
 void displayMessage(char title[], char line1[], char line2[]);
 void showCalibrationScreen(int stage, int secondsLeft);
@@ -88,3 +87,14 @@ const uint8_t nanotx_logo_72x40[] U8X8_PROGMEM = {
   B00000000, B00000000, B00000000, B00000000, B00000000, B00000000, B00000000, B00000000, B00000000,
 };
 
+const uint8_t bt_logo_8x10[] = { B00001000, 
+                                B00011000, 
+                                B00101010, 
+                                B00011100, 
+                                B00001000, 
+                                B00011100, 
+                                B00101010, 
+                                B00011000, 
+                                B00001000,
+                                B00000000 };
+#endif
