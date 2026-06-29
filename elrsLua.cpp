@@ -25,7 +25,7 @@ ELRSLua::ELRSLua(CRSF& crsfInstance) : crsf(crsfInstance) {}
 // Command builder functions
 // ========================================================
 
-void ELRSLua::SendCommand(uint8_t command, uint8_t value) {
+void ELRSLua::sendCommand(uint8_t command, uint8_t value) {
     uint8_t packetCmd[CRSF_CMD_PACKET_SIZE];
 
     packetCmd[0] = MODULE_ADDRESS;
@@ -46,7 +46,7 @@ void ELRSLua::SendCommand(uint8_t command, uint8_t value) {
 #endif
 }
 
-void ELRSLua::PingDevices() {
+void ELRSLua::pingDevices() {
     uint8_t packetCmd[6];
 
     packetCmd[0] = MODULE_ADDRESS;
@@ -59,7 +59,7 @@ void ELRSLua::PingDevices() {
     crsf.crsfQueuePacket(packetCmd, 6);
 }
 
-void ELRSLua::RequestSetting(uint8_t settingIndex, uint8_t chunk) {
+void ELRSLua::requestSetting(uint8_t settingIndex, uint8_t chunk) {
     uint8_t packetCmd[8];
 
     packetCmd[0] = MODULE_ADDRESS;        // 0xEE (Target Device: External TX Module)
@@ -82,15 +82,15 @@ void ELRSLua::RequestSetting(uint8_t settingIndex, uint8_t chunk) {
 }
 
 // Request Info Message by sending ELRS_SETTINGS_WRITE (0x2D) with param/value 0
-void ELRSLua::RequestElrsStatus() {
-    SendCommand(0,0);
+void ELRSLua::requestElrsStatus() {
+    sendCommand(0,0);
 }
 
 
 // Response Parser functions
 // ========================================================
 
-void ELRSLua::ParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
+void ELRSLua::parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
   // Clear any existing stored text profile settings
   memset(txModule.name, 0, sizeof(txModule.name)); 
 
@@ -140,7 +140,85 @@ void ELRSLua::ParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
   }
 }
 
-void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
+
+void ELRSLua::parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length) {
+    static uint8_t tempParamStorage[CRSF_PAYLOAD_SIZE_MAX * 5]; 
+    static uint16_t tempStorageIndex = 0;
+    static uint8_t expectedChunksRemain = 0;
+    uint8_t currentIdx = 5;
+    uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
+    if (fieldIndex != activeExpectedParamIndex) {
+        memset(tempParamStorage, 0, sizeof(tempParamStorage));
+        tempStorageIndex = 0; 
+        currentChunk = 0;
+        return;
+    }
+
+    int slot = getParamSlot(fieldIndex);
+    chunksRemaining = rxBuffer[currentIdx++]; //6
+    if (slot == -1 || (tempStorageIndex > 0 && chunksRemaining != expectedChunksRemain)) {
+        return;
+    }
+
+    // If data is chunked, copy it to persistent buffer
+    if (chunksRemaining > 0 || currentChunk > 0) {
+        // fieldData = fieldData or {}
+        if (tempStorageIndex == 0) {
+            memset(tempParamStorage, 0, sizeof(tempParamStorage));
+            tempStorageIndex = 0; 
+
+        }
+
+    }
+/*
+  local offset
+  -- If data is chunked, copy it to persistent buffer
+  if chunksRemain > 0 or fieldChunk > 0 then
+    fieldData = fieldData or {}
+    for i=5, #data do
+      fieldData[#fieldData + 1] = data[i]
+      data[i] = nil
+    end
+    offset = 1
+  else
+    -- All data arrived in one chunk, operate directly on data
+    fieldData = data
+    offset = 5
+  end
+
+  if chunksRemain > 0 then
+    fieldChunk = fieldChunk + 1
+    expectChunksRemain = chunksRemain - 1
+  else
+    -- Field data stream is now complete, process into a field
+    loadQ[#loadQ] = nil
+
+    if #fieldData > (offset + 2) then
+      field.id = fieldId
+      field.parent = (fieldData[offset] ~= 0) and fieldData[offset] or nil
+      field.type = bit32.band(fieldData[offset+1], 0x7f)
+      field.hidden = bit32.btest(fieldData[offset+1], 0x80) or nil
+      field.name, offset = fieldGetStrOrOpts(fieldData, offset+2, field.name)
+      if functions[field.type+1].load then
+        functions[field.type+1].load(field, fieldData, offset)
+      end
+      if field.min == 0 then field.min = nil end
+      if field.max == 0 then field.max = nil end
+    end
+
+    fieldChunk = 0
+    fieldData = nil
+
+    -- Return value is if the screen should be updated
+    -- If deviceId is TX module, then the Bad/Good drives the update; for other
+    -- devices update each new item. and always update when the queue empties
+    return deviceId ~= 0xEE or #loadQ == 0
+  end
+*/
+
+}
+
+void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
   uint8_t currentIdx = 5;
   uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
 
@@ -148,7 +226,7 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
   if (slot != -1) {
     chunksRemaining = rxBuffer[currentIdx++]; //6
 
-    if (fieldIndex == currentSettingsIndex) settingAttemptsCounter = 0;
+    //if (fieldIndex == currentSettingsIndex) settingAttemptsCounter = 0;
 
     if (currentChunk == 0) {
       // Parent folder and type only included on initial chunk packet
@@ -164,6 +242,12 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
       }
       txModule.params[slot].label[labelCharCount] = '\0'; 
       currentIdx++; 
+
+      // reset the valueString if it is not blank (this would happen if the item is being reloaded)
+      if (txModule.params[slot].valueStringCharCount > 0) {
+        memset(txModule.params[slot].valueString, 0, sizeof(txModule.params[slot].valueString));
+        txModule.params[slot].valueStringCharCount = 0;
+      }
     } 
              
     uint8_t unitCharCount = 0;
@@ -188,7 +272,8 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
             Serial.print(txModule.params[slot].currentVal); Serial.println(txModule.params[slot].units);
 #endif
             currentChunk = 0;
-            currentSettingsIndex++;
+            // currentSettingsIndex++;
+            currentSettingsIndex = -1; // Move on to the next in the stack
             break;
         case CRSF_TEXT_SELECTION:
             // Dropdown/options selection - the main type used in ELRS
@@ -244,7 +329,8 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
 #endif
               // Move on to process the next sequential hardware parameter tree setting
               currentChunk = 0;
-              currentSettingsIndex++;
+              // currentSettingsIndex++;
+              currentSettingsIndex = -1; // Move on to the next in the stack
             }
             else {
               // Data payload remains chunked, increment block indicators to fetch remaining parts
@@ -266,7 +352,8 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
 #endif
             // Move on to process the next sequential hardware parameter tree setting
             currentChunk = 0;
-            currentSettingsIndex++;
+            // currentSettingsIndex++;
+            currentSettingsIndex = -1; // Move on to the next in the stack
             break;
         case CRSF_INFO:
             // Display non-editable static string
@@ -280,7 +367,8 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
             Serial.print(" | Info String: "); Serial.println(txModule.params[slot].valueString);
 #endif
             currentChunk = 0;
-            currentSettingsIndex++;
+            // currentSettingsIndex++;
+            currentSettingsIndex = -1; // Move on to the next in the stack
             break;
         case CRSF_COMMAND:
             // Execute command / status such as initiate bind or BLE joystick
@@ -329,7 +417,8 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
             Serial.print(" | Info/Status : "); Serial.print(txModule.params[slot].valueString); Serial.println(")");
 #endif
             currentChunk = 0;
-            currentSettingsIndex++;
+            // currentSettingsIndex++;
+            currentSettingsIndex = -1; // Move on to the next in the stack
             break;
         default:
             // String, Float or Int types defined in spec but not used in ELRS
@@ -341,14 +430,15 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
             } Serial.println();
 #endif
             currentChunk = 0;
-            currentSettingsIndex++;
+            // currentSettingsIndex++;
+            currentSettingsIndex = -1; // Move on to the next in the stack
         break;
     }
     lastParameterQueryTime = 0;  //Move on to the next parameter immediately
   }
 }
 
-void ELRSLua::ParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
+void ELRSLua::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
     // rxBuffer[3] = destination (handset, 0xEF/0xEA), rxBuffer[4] = source (TX module, 0xEE).
     // Discard frames not originating from the ELRS TX module address.
     if (rxBuffer[4] != MODULE_ADDRESS) {
@@ -508,8 +598,8 @@ uint8_t ELRSLua::nextInFolder() {
         }
     }
     // if we got here it means there were no other entries at this folder level
-    // Now go back to the start and find the first item in the folder (index 1 since 0 is a special item).
-    for (uint8_t i = 1; i < selectedParam; i++) {
+    // Now go back to the start and find the first item in the folder
+    for (uint8_t i = 0; i < selectedParam; i++) {
         if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
             selectedParam = i;
             return 2;
@@ -522,7 +612,7 @@ uint8_t ELRSLua::nextInFolder() {
 uint8_t ELRSLua::prevInFolder() {
     uint8_t parentFolder = txModule.params[selectedParam].parentFolder;
 
-    for (uint8_t i = selectedParam - 1; i >= 1; i--) {
+    for (uint8_t i = selectedParam - 1; i >= 0; i--) {
         if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
             selectedParam = i;
             return 1;
@@ -648,34 +738,50 @@ void ELRSLua::editParamNext() {
 }
 
 void ELRSLua::editParamSave() {
-    SendCommand(selectedParam, editValue); // This will queue the command to update the parameter. It will respond with the updated parameter settings entry
-    /* 
-    As per https://github.com/crsf-wg/crsf/wiki/CRSF_FRAMETYPE_PARAMETER_WRITE
-    Note that ExpressLRS's implementation of the CRSF Config protocol assumes the client will reload most same-level 
-    parameters to account for any changes to other items caused by a Write Parameter. This includes the parent folder 
-    item if this item is a child, as well as any other value types (e.g. SELECT, UINT8, INFO). Sub-FOLDER type and 
-    COMMAND type parameters, as well as any child parameters of this item are not refreshed. 
-
-    Assume this does not include menu level 0 items...
-    */
-    //txModule.params[selectedParam].currentVal = editValue
-    RequestSetting(selectedParam, 0); // Update this setting from the module rather than assuming the save was successful
-    // Also update parentFolder (if this is a child), and other items in this folder tree level
+    sendCommand(selectedParam, editValue); // This will queue the command to update the parameter
+    txModule.params[selectedParam].currentVal = editValue; // updating the local value manually - will update via the refreshStack too
+    
+    // Update parentFolder (if this is a child), and other items in this folder tree level
+    loadOneParam(selectedParam); // Update this setting as well
     int parentFolder = txModule.params[selectedParam].parentFolder;
     if (parentFolder > 0) {
-        RequestSetting(parentFolder, 0);
         for (uint8_t i = parentFolder+1; i < txModule.paramCount; i++) {
             if (i != selectedParam && 
                 txModule.params[i].parentFolder == parentFolder && 
                 !txModule.params[i].hidden &&
                 txModule.params[i].type != CRSF_FOLDER &&
                 txModule.params[i].type != CRSF_COMMAND) {
-                RequestSetting(i, 0);
+                loadOneParam(i);
             }
         }
+        loadOneParam(parentFolder);
     }
 
+    lastParameterQueryTime = millis();
+    lastHandshakeTime +=100;
     menuState = MENU_BROWSE;  // Set menu state back to browse
+}
+
+
+void ELRSLua::loadAllParams(uint8_t totalCount) {
+    loadQueue.clear();
+    //Serial.print("Loading "); Serial.print(totalCount); Serial.println("items");
+    // Push backward so they pop in ascending order (1, 2, 3...)
+    for (int i = totalCount; i >= 0; i--) {
+        loadQueue.push(i);
+        Serial.print(i); Serial.print(", ");
+    }
+    //Serial.println("(end)");
+    connectionState = ELRS_LOAD_PARAMS; 
+}
+
+void ELRSLua::loadOneParam(uint8_t paramIndex) {
+    if (loadQueue.push(paramIndex)) {
+        // Intercept READY state and force a background cycle if needed
+        if (connectionState == ELRS_READY) {
+            connectionState = ELRS_LOAD_PARAMS;
+        }
+    }
 }
 
 // Main driver function
@@ -694,13 +800,13 @@ void ELRSLua::update() {
         switch (packetType) {
           case ELRS_DEVICE_INFO:
             moduleInfoReceived = true;
-            ParseDeviceInfoPacket(telemetryPacket.data, telemetryPacket.length);     
+            parseDeviceInfoPacket(telemetryPacket.data, telemetryPacket.length);     
             break;           
           case ELRS_SETTINGS_RESPONSE:
-            ParseSettingsPacket(telemetryPacket.data, telemetryPacket.length);
+            parseSettingsPacket(telemetryPacket.data, telemetryPacket.length);
             break;
           case ELRS_STATUS:
-            ParseElrsStatusPacket(telemetryPacket.data, telemetryPacket.length);
+            parseElrsStatusPacket(telemetryPacket.data, telemetryPacket.length);
             break;
         }
       }
@@ -721,7 +827,7 @@ void ELRSLua::update() {
             // Every 1000ms, send a Device Ping (0x28)
             if (now - lastHandshakeTime > 1000) {
                 lastHandshakeTime = now;
-                PingDevices(); // Sends 0x28
+                pingDevices(); // Sends 0x28
 #ifdef LUADEBUG        
                 Serial.println("[ELRS] Sending Device Ping (0x28)...");
 #endif
@@ -729,52 +835,58 @@ void ELRSLua::update() {
             
             // Transition condition: If the parser caught a 0x29 packet and saved a name
             if (strlen(txModule.name) > 0) {
-                connectionState = ELRS_CONNECTED;
-                lastHandshakeTime = now;
-                currentSettingsIndex = 0;  
-                currentChunk = 0;      
-                parameterDiscoveryActive = true;
-                lastParameterQueryTime = now;
                 txModule.paramsLoaded = false;
+                loadAllParams(totalSettingsCount);
+                connectionState = ELRS_LOAD_PARAMS;
+                // currentSettingsIndex = 0;  
+                currentChunk = 0;      
+                // parameterDiscoveryActive = true;
+                lastParameterQueryTime = now;
+
+                lastHandshakeTime = now;
                 Serial.println("[ELRS] Module Detected! Getting Stats/Initializing param discovery...");  //Send this regardless of debug
-                RequestElrsStatus();
+                requestElrsStatus();
             }
             break;
 
-        case ELRS_CONNECTED:
+        case ELRS_LOAD_PARAMS:
             if (now - lastHandshakeTime > 1000) {
                 lastHandshakeTime = now;
-                RequestElrsStatus();
+                requestElrsStatus();
 #ifdef LUADEBUG        
                 Serial.println("[ELRS] Sending LinkStat Request (0x2D, 0, 0)...");
 #endif
             }
-            if (parameterDiscoveryActive) {
-                if (now - lastParameterQueryTime > 500) {
-                    lastParameterQueryTime = now;
-                    if (currentSettingsIndex > totalSettingsCount) {
-                        connectionState = ELRS_READY;
-                        parameterDiscoveryActive = false;
+            if (now - lastParameterQueryTime > 500) {
+                Serial.print("now: "); Serial.print(now); Serial.print(". LastParameterQueryTime: "); Serial.println(lastParameterQueryTime);
+                if (currentSettingsIndex != -1) {
+                    // if (now - lastParameterQueryTime > 500) {
+                        requestSetting(currentSettingsIndex, currentChunk); // Retry last setting, or get next chunk
+                        lastParameterQueryTime = now;
+                    // }
+                } else {
+                    // Fetch the next item from the queue
+                    if (!loadQueue.isEmpty()) {
+                        currentSettingsIndex = loadQueue.pop();
+                        currentChunk = 0;
+                        requestSetting(currentSettingsIndex, currentChunk);
+                        lastParameterQueryTime = now;
+                    } else {
                         txModule.paramsLoaded = true;
                         Serial.println("[ELRS] >>> PARAMETER TREE MATRIX FULLY POPULATED AND CACHED <<<");
-                    } else {
-                        settingAttemptsCounter++;
-                        if (settingAttemptsCounter > 3) { // After 3 attempts at the same entry, move on to the next.
-                            currentChunk=0;
-                            currentSettingsIndex++;
-                        }
-                        RequestSetting(currentSettingsIndex, currentChunk);
+                        // Done! set state machine back to ready
+                        connectionState = ELRS_READY;
                     }
                 }
             }
             break;
 
         case ELRS_READY:
-            // Normal operation loop. Do nothing or process cyclic background tasks.
+            // Normal operation loop
             // if (showMenu && now - lastHandshakeTime > 1000) {
             if (now - lastHandshakeTime > 1000) {
                 lastHandshakeTime = now;
-                RequestElrsStatus();
+                requestElrsStatus();
 #ifdef LUADEBUG        
                 Serial.println("[ELRS] Sending LinkStat Request (0x2D, 0, 0)...");
 #endif
@@ -784,7 +896,7 @@ void ELRSLua::update() {
 
     // If the crsf class detects the module is disconnected, drop back to pinging
     if (!crsf.moduleConnected && (connectionState > ELRS_PINGING)) {
-        parameterDiscoveryActive = false;
+        loadQueue.clear();
         clearModule();
         connectionState = ELRS_PINGING;
         Serial.println("[ELRS] Module connection Lost.");  // Print this regardless

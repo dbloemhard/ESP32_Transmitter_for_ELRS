@@ -45,6 +45,7 @@ class CRSF;  // Forward Declaration
 #define CRSF_MAX_STRING_LEN             32
 #define CRSF_MAX_PARAM_DATA_LEN         256
 #define CRSF_SUBTYPE_OPENTX_SYNC        0x10
+#define CRSF_LOAD_QUEUE_MAX_ITEMS       64  // Can be anything, but lets just make it a bunch bigger than the expected size (21-22)
 
 // ELRS (CRSF) Frame types
 #define ELRS_CHANNELS                   0x16
@@ -64,6 +65,38 @@ class CRSF;  // Forward Declaration
 #define BROADCAST_ADDRESS               0x00
 #define SYNC_BYTE                       0xC8
 
+
+// Simple LIFO Stack for tracking pending parameters to query
+struct LoadStack {
+    uint8_t items[CRSF_LOAD_QUEUE_MAX_ITEMS];
+    int8_t top = -1;
+
+    bool push(uint8_t paramIndex) {
+        if (top >= CRSF_LOAD_QUEUE_MAX_ITEMS - 1 || paramIndex < 0) return false;
+        // Avoid adding duplicate IDs already waiting in line
+        for (int i = 0; i <= top; i++) {
+            if (items[i] == paramIndex) return true; 
+        }
+        items[++top] = paramIndex;
+        return true;
+    }
+
+    int16_t pop() {
+        if (top < 0) return -1;
+        return items[top--];
+    }
+
+    bool isEmpty() {
+        return top == -1;
+    }
+
+    void clear() {
+        top = -1;
+    }
+};
+
+// Call this anywhere to safely add target items to the processing pipeline
+void enqueueParamRefresh(uint8_t paramIndex);
 
 // Individual Option/Choice Structure (For SELECT type parameters)
 struct crsfOption {
@@ -163,13 +196,15 @@ public:
 
 private:
     CRSF& crsf;  // Reference link to the CRSF instance
-    enum crsfConnectState {ELRS_BOOT_DELAY, ELRS_PINGING, ELRS_CONNECTED, ELRS_READY};
+    enum crsfConnectState {ELRS_BOOT_DELAY, ELRS_PINGING, ELRS_LOAD_PARAMS, ELRS_READY};
     crsfConnectState connectionState = ELRS_BOOT_DELAY;
+    LoadStack loadQueue;
+    int16_t activeExpectedParamIndex = -1; 
     bool moduleInfoReceived = false;
     uint32_t lastHandshakeTime = 0;   
     uint32_t lastParameterQueryTime = 0;
     bool parameterDiscoveryActive = false;
-    uint8_t currentSettingsIndex = 0;
+    int16_t currentSettingsIndex = -1;
     uint8_t currentChunk = 0;
     uint8_t chunksRemaining = 0;
     uint8_t settingAttemptsCounter = 0;
@@ -179,15 +214,20 @@ private:
     uint32_t lastLinkStatRequestTime = 0;
     uint32_t lastSyncPacketDisplay = 0;
 
-    void SendCommand(uint8_t command, uint8_t value);  // Enqueue command
-    void PingDevices();
-    void RequestElrsStatus();
-    void RequestSetting(uint8_t settingIndex, uint8_t chunk);
-    void ParseLinkStatsPacket(uint8_t rxBuffer[]);
-    void ParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length);
-    void ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length);   
-    void ParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length);
+    void sendCommand(uint8_t command, uint8_t value);  // Enqueue command
+    void pingDevices();
+    void requestElrsStatus();
+    void requestSetting(uint8_t settingIndex, uint8_t chunk);
+    //void parseLinkStatsPacket(uint8_t rxBuffer[]);
+    void parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length);
+    void parseSettingsPacket(uint8_t rxBuffer[], uint8_t length);   
+    void parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length);
+    
+    // wip - copy functionality from Lua
+    void parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length);
 
+    void loadAllParams(uint8_t totalCount);
+    void loadOneParam(uint8_t paramIndex);
     int getParamSlot(uint8_t id); 
     //uint8_t parseChoicesString(int slot, uint8_t* buffer, uint8_t startIdx, uint8_t maxLen);
     void parseChoicesString(int paramIndex);
