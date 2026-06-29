@@ -38,6 +38,12 @@ void ELRSLua::SendCommand(uint8_t command, uint8_t value) {
     packetCmd[7] = 0; // CRC calculated by the queue function
 
     crsf.crsfQueuePacket(packetCmd,CRSF_CMD_PACKET_SIZE);
+#ifdef LUADEBUG        
+    Serial.print("[ELRS] -> Send Command: ");
+    Serial.print(command);
+    Serial.print(", Value: ");
+    Serial.print(value); Serial.println();
+#endif
 }
 
 void ELRSLua::PingDevices() {
@@ -147,7 +153,8 @@ void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
     if (currentChunk == 0) {
       // Parent folder and type only included on initial chunk packet
       txModule.params[slot].parentFolder = rxBuffer[currentIdx++]; //7
-      txModule.params[slot].type = static_cast<crsfValueType>(rxBuffer[currentIdx++] & 0x7F);  //8
+      txModule.params[slot].type = static_cast<crsfValueType>(rxBuffer[currentIdx] & 0x7F);  //8
+      txModule.params[slot].hidden = (rxBuffer[currentIdx++] & 0x80);  //8
 
       // Parse out the Parameter Label String starting at Index 9
       uint8_t labelCharCount = 0;
@@ -399,6 +406,7 @@ void ELRSLua::clearModule() {
         txModule.params[i].id = 0;
         txModule.params[i].parentFolder = 0;
         txModule.params[i].type = static_cast<crsfValueType>(0);
+        txModule.params[i].hidden = false;
         txModule.params[i].currentVal = 0;
         memset(txModule.params[i].label, 0, sizeof(txModule.params[i].label)); 
         for (int j = 0; j < txModule.params[i].choicesCount; j++) {
@@ -459,6 +467,7 @@ int ELRSLua::getParamSlot(uint8_t id) {
         // Initialize all parameter data
         txModule.params[freshSlot].parentFolder = 0;
         txModule.params[freshSlot].type = static_cast<crsfValueType>(0);
+        txModule.params[freshSlot].hidden = false;
         txModule.params[freshSlot].currentVal = 0;
         txModule.params[freshSlot].minVal = 0;
         txModule.params[freshSlot].maxVal = 0;
@@ -481,6 +490,193 @@ int ELRSLua::getParamSlot(uint8_t id) {
 }
 
 
+// Menu driver functions
+// ========================================================
+// Updates the selectedParam and returns a number indicating which way it navigated
+// 0 = No move
+// 1 = Up
+// 2 = Down
+// 3 = Left
+// 4 = Right
+uint8_t ELRSLua::nextInFolder() {
+    uint8_t parentFolder = txModule.params[selectedParam].parentFolder;
+
+    for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {
+        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
+            selectedParam = i;
+            return 2; // Moved down
+        }
+    }
+    // if we got here it means there were no other entries at this folder level
+    // Now go back to the start and find the first item in the folder (index 1 since 0 is a special item).
+    for (uint8_t i = 1; i < selectedParam; i++) {
+        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
+            selectedParam = i;
+            return 2;
+        }
+    }
+    // not found (unexpected), dont updated selected param and return 'no move'
+    return 0;
+}
+
+uint8_t ELRSLua::prevInFolder() {
+    uint8_t parentFolder = txModule.params[selectedParam].parentFolder;
+
+    for (uint8_t i = selectedParam - 1; i >= 1; i--) {
+        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
+            selectedParam = i;
+            return 1;
+        }
+    }
+    // if we got here it means there were no other entries at this folder level
+    // Now search backwards from the end and find the last item in the folder.
+    for (uint8_t i = txModule.paramCount - 1; i > selectedParam ; i--) {
+        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
+            selectedParam = i;
+            return 1;
+        }
+    }
+    // not found (unexpected), dont updated selected param and return 'no move'
+    return 0;
+}
+
+uint8_t ELRSLua::enterFolder() {
+    if (txModule.params[selectedParam].type != CRSF_FOLDER) return 0;
+    for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {  // Assume child items will follow folder
+        if (txModule.params[i].parentFolder == selectedParam && !txModule.params[i].hidden) {
+            selectedParam = i;
+            return 4;
+        }
+    }
+    // not found (unexpected), dont updated selected param and return 'no move'
+    return 0;
+}
+
+uint8_t ELRSLua::exitFolder() {
+    if (txModule.params[selectedParam].parentFolder == 0) {
+        if (selectedParam > 0) { // pressing left brings you back to the top of the menu
+            selectedParam = 0;
+            return 1;
+        } else {
+            return 0;
+        }
+    } else {
+        selectedParam = txModule.params[selectedParam].parentFolder;
+        return 3;
+    }
+}
+
+const crsfParameter& ELRSLua::getCurrentParam() const {
+    return getParam(selectedParam);
+}
+
+const crsfParameter& ELRSLua::getParam(const uint8_t index) const {
+    if (ready() && txModule.paramsLoaded && index >= 0 && index < txModule.paramCount) {
+        return txModule.params[index]; // Returns a reference directly to the array item
+    } else {
+        static crsfParameter notFound;
+        notFound.id = 0;
+        notFound.parentFolder = 0;
+        notFound.type = CRSF_INFO;
+        strcpy(notFound.label, "Loading...");
+        return notFound;
+    }
+}
+
+int ELRSLua::findParamByLabel(const char searchString[]) const {
+    for (uint8_t i = 1; i < txModule.paramCount; i++) {
+        if (strncmp(txModule.params[i].label, searchString, strlen(searchString)) == 0 ) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Edit Param functions
+void ELRSLua::editParamPrev() { 
+    switch(txModule.params[selectedParam].type) {
+        case CRSF_UINT8:
+        case CRSF_INT8:
+        case CRSF_UINT16:
+        case CRSF_INT16:
+        case CRSF_UINT32:
+        case CRSF_INT32:
+        case CRSF_UINT64:
+        case CRSF_INT64:
+        case CRSF_TEXT_SELECTION:
+            editValue--;
+            if (editValue < txModule.params[selectedParam].minVal) editValue = txModule.params[selectedParam].minVal;
+            break;
+        case CRSF_FLOAT:
+            editValue -= txModule.params[selectedParam].step;
+            if (editValue < txModule.params[selectedParam].minVal) editValue = txModule.params[selectedParam].minVal;
+            break;
+        case CRSF_STRING:
+            // Not sure on this one... Not needed for now
+            break;
+        default:
+            // Do nothing
+            break;   
+    }
+}
+
+void ELRSLua::editParamNext() {
+    switch(txModule.params[selectedParam].type) {
+        case CRSF_UINT8:
+        case CRSF_INT8:
+        case CRSF_UINT16:
+        case CRSF_INT16:
+        case CRSF_UINT32:
+        case CRSF_INT32:
+        case CRSF_UINT64:
+        case CRSF_INT64:
+        case CRSF_TEXT_SELECTION:
+            editValue++;
+            if (editValue > txModule.params[selectedParam].maxVal) editValue = txModule.params[selectedParam].maxVal;
+            break;
+        case CRSF_FLOAT:
+            editValue += txModule.params[selectedParam].step;
+            if (editValue > txModule.params[selectedParam].maxVal) editValue = txModule.params[selectedParam].maxVal;
+            break;
+        case CRSF_STRING:
+            // Not sure on this one... Not needed for now
+            break;
+        default:
+            // Do nothing
+            break;   
+    }
+}
+
+void ELRSLua::editParamSave() {
+    SendCommand(selectedParam, editValue); // This will queue the command to update the parameter. It will respond with the updated parameter settings entry
+    /* 
+    As per https://github.com/crsf-wg/crsf/wiki/CRSF_FRAMETYPE_PARAMETER_WRITE
+    Note that ExpressLRS's implementation of the CRSF Config protocol assumes the client will reload most same-level 
+    parameters to account for any changes to other items caused by a Write Parameter. This includes the parent folder 
+    item if this item is a child, as well as any other value types (e.g. SELECT, UINT8, INFO). Sub-FOLDER type and 
+    COMMAND type parameters, as well as any child parameters of this item are not refreshed. 
+
+    Assume this does not include menu level 0 items...
+    */
+    //txModule.params[selectedParam].currentVal = editValue
+    RequestSetting(selectedParam, 0); // Update this setting from the module rather than assuming the save was successful
+    // Also update parentFolder (if this is a child), and other items in this folder tree level
+    int parentFolder = txModule.params[selectedParam].parentFolder;
+    if (parentFolder > 0) {
+        RequestSetting(parentFolder, 0);
+        for (uint8_t i = parentFolder+1; i < txModule.paramCount; i++) {
+            if (i != selectedParam && 
+                txModule.params[i].parentFolder == parentFolder && 
+                !txModule.params[i].hidden &&
+                txModule.params[i].type != CRSF_FOLDER &&
+                txModule.params[i].type != CRSF_COMMAND) {
+                RequestSetting(i, 0);
+            }
+        }
+    }
+
+    menuState = MENU_BROWSE;  // Set menu state back to browse
+}
 
 // Main driver function
 // ========================================================

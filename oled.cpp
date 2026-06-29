@@ -16,6 +16,7 @@
  */
  
 #include "oled.h"
+
 displayState currentScreen = MAIN_PAGE;
 displayState lastScreen;
 // Instantiate the U8g2 object. (Rotation R0, No reset pin, SCL pin 6, SDA pin 5)
@@ -25,28 +26,20 @@ U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* cl
 void initDisplay() {
     // Force I2C initialization to use the board's dedicated hardware pins (SDA=5, SCL=6)
     Wire.begin(5, 6);
-    //Wire.setClock(800000); // 800kHz ultra-fast clock rate minimizes I2C bus lockup time
     // Start U8g2
     display.begin();
-    display.setContrast(255); // Maximize visibility on the tiny 0.42" screen
-    display.setBusClock(800000); // 400kHz fast I2C mode matching your ELRS telemetry update speed
-    
-    // Choose a small, scannable font fitting the 40px height limit
-    display.setFont(u8g2_font_04b_03_tr); 
+    display.setContrast(255);
+    display.setBusClock(800000); // 400kHz fast I2C mode
 }
 
-void showBootLogo() {
+void drawBootLogo() {
     display.clearBuffer();          // Clear the display internal ram memory
     
     // Draw NanoTX logo
     // Parameters: drawXBM(x_start, y_start, width, height, bitmap_array)
     display.drawXBM(0, 0, 72, 40, nanotx_logo_72x40);
-    
-    // 2. Add your dynamic runtime status text on the bottom area
-    // Micro fonts like u8g2_font_u8glib_4_tf (4px height) fit perfectly in tight 72x40 panels
+
     display.setFont(u8g2_font_tiny5duo_tf); 
-    
-    // Print ELRS version or connection updates dynamically 
     display.setCursor(2, 36);       // X=2, Y=38 bottom-left
     display.print("ELRS");
     
@@ -63,13 +56,13 @@ void clearScreen() {
 
 void nextScreen() {
     switch (currentScreen) {
-        case MAIN_PAGE:       currentScreen = ELRS_STATS_PAGE; break;
-        case ELRS_STATS_PAGE: currentScreen = MAIN_PAGE;       break; // Wrap around
+        case MAIN_PAGE:  currentScreen = ELRS_STATS; break;
+        case ELRS_STATS: currentScreen = MAIN_PAGE;  break; // Wrap around
     }
 }
 
 
-void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
+void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
     static int lastVoltageX10 = 0;
     static int lastTelemetryState = -1;
     static int lastBars = 0;
@@ -228,38 +221,296 @@ void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16
     lastScreen = currentScreen;
 }
 
-void updateElrsStatsScreen(const ELRSLua& luaInstance) {
+void drawElrsStatsScreen(const ELRSLua& elrs) {
       // U8g2 full frame buffer drawing process
       display.clearBuffer();
-      
-      // NOTE: All drawing coordinates must add the OLED_X_OFFSET and OLED_Y_OFFSET 
-      // to map correctly onto the visible 72x40 matrix array.
-      
-      // Example Status Display Layout:
-    display.setFont(u8g2_font_nokiafc22_tf); 
+
+//    display.setFont(u8g2_font_nokiafc22_tf); 
+    display.setFont(u8g2_font_squeezed_b7_tr); 
     display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 8);
-    display.print(luaInstance.txModule.name);
-    //u8g2_font_squeezed_b7_tr
+    if (strlen(elrs.txModule.name) > 0) {
+        display.print(elrs.txModule.name);
 
-    display.setFont(u8g2_font_artossans8_8r); 
-    display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 22);
-    display.print(luaInstance.txModule.params[1].choices[luaInstance.txModule.params[1].currentVal].text); 
+//        display.setFont(u8g2_font_artossans8_8r); 
+        display.setFont(u8g2_font_NokiaSmallPlain_tr); 
+        display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 22);
 
-    display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 36);
-    display.print(luaInstance.txModule.params[7].choices[luaInstance.txModule.params[7].currentVal].text); 
-    display.print(luaInstance.txModule.params[7].units);
-    if (luaInstance.txModule.params[8].currentVal == 1) display.print(" (Dynamic)");
-      
-    // Optional: Draw a tiny visual frame bounding the visible screen region
-    //display.drawFrame(OLED_X_OFFSET, OLED_Y_OFFSET, OLED_WIDTH, OLED_HEIGHT);
-      
-    // Send local RAM buffer to the physical display
+        if (elrs.ready()) {
+            int index = elrs.findParamByLabel(LABEL_PACKET_RATE);
+            if (index >= 0) {
+                const crsfParameter &param = elrs.getParam(index);
+                display.print(param.choices[param.currentVal].text); 
+            } else {
+                display.print("Packet rate ???"); 
+            }
+            display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 36);
+            index = elrs.findParamByLabel(LABEL_TX_POWER_STRING);
+            if (index >= 0) {
+                const crsfParameter &param = elrs.getParam(index);
+                display.print(param.label); 
+            } else {
+                display.print("TX power ???"); 
+            }
+
+        } else {
+            display.print("Loading Params...");
+        }
+
+    } else {
+        display.print("No TX Module");
+        display.setFont(u8g2_font_streamline_interface_essential_circle_triangle_t);
+        display.setCursor(OLED_X_OFFSET + 25, OLED_Y_OFFSET + 38);   
+        display.print("3"); // Icon set exclamation mark in triangle     
+    }
+
     display.sendBuffer();
     lastScreen = currentScreen;
 
 }
 
-void displayMessage(char title[], char line1[], char line2[]) {
+uint8_t nextAnimation;
+// 0 = No animation
+// 1 = Animate Up
+// 2 = Animate Down
+// 3 = Animate Left
+// 4 = Animate Right
+void animateMenu() {
+    
+}
+
+// uint8_t direction
+// 0 = No move/button
+// 1 = Up
+// 2 = Down
+// 3 = Left
+// 4 = Right
+// 5 = Joystick button
+// 6 = Built in button (short press)
+// 7 = Built in button (long press)
+void navigateELRSMenu(ELRSLua &elrs, uint8_t direction) {
+    if (direction == 0) return;
+    switch (elrs.menuState) {
+        case ELRSLua::MENU_BROWSE:
+            nextAnimation = 0;
+            switch (direction) {
+                case 1:
+                    nextAnimation = elrs.prevInFolder();
+                    break;
+                case 2:
+                    nextAnimation = elrs.nextInFolder();
+                    break;
+                case 3:
+                    nextAnimation = elrs.exitFolder();
+                    break;
+                case 4:
+                    nextAnimation = elrs.enterFolder();
+                    break;
+                case 5:
+                    switch (elrs.getCurrentParam().type) {
+                        case CRSF_COMMAND:
+                            //elrs.executeCommand(elrs.currentParam);
+                            break;
+                        case CRSF_UINT8:
+                        case CRSF_INT8:
+                        case CRSF_UINT16:
+                        case CRSF_INT16:
+                        case CRSF_UINT32:
+                        case CRSF_INT32:
+                        case CRSF_UINT64:
+                        case CRSF_INT64:
+                        case CRSF_FLOAT:
+                        case CRSF_TEXT_SELECTION:
+                        case CRSF_STRING:
+                            elrs.editValue = elrs.getCurrentParam().currentVal;
+                            elrs.menuState = ELRSLua::MENU_EDIT;  // Change to edit mode
+                            break;
+                        default:
+                            // Do nothing
+                            break;   
+                    }
+                    break;
+                case 6:
+                    elrs.selectedParam = 0;
+                    elrs.menuState = ELRSLua::MENU_BROWSE;
+                    currentScreen = ELRS_STATS;  // Exit out of the menu
+                    break;
+                    // 7/Long press not handled in menu
+            }
+            break;
+        case ELRSLua::MENU_EDIT:
+            switch (direction) {
+                case 3:
+                    elrs.editParamPrev();
+                    break;
+                case 4:
+                    elrs.editParamNext();
+                    break;
+                case 5:
+                    elrs.editParamSave();  // Save the menu (this function will also exit back to browse mode)
+                    break;
+                case 6:
+                    elrs.editValue = elrs.getCurrentParam().currentVal; // reset selection
+                    elrs.menuState = ELRSLua::MENU_BROWSE;  // Go back to browse mode
+                    break;
+            }
+            break;
+        case ELRSLua::MENU_POPUP:
+            switch (direction) {
+                case 5:
+                    //elrs.sendCommandConfirm(elrs.currentParam);  // Confirm/execute
+                    break;   
+                case 6:
+                    //elrs.sendCommandCancel(elrs.currentParam);  // Cancel current command
+                    break;   
+            }
+            break;
+    }
+}
+
+void drawElrsMenuScreen(const ELRSLua& elrs) {
+//void drawELRSMenu(const ELRSLua& elrs) {
+    static int menuIndex;
+    static const int tenToThePowerOf[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+    float floatVal;
+    const crsfParameter &param = elrs.getCurrentParam();
+    //crsfParameter &param = elrs.txModule.params[elrs.selectedParam];
+
+    display.clearBuffer();
+    display.setFont(u8g2_font_squeezed_b7_tr);     
+    
+    switch (elrs.menuState) {
+        case ELRSLua::MENU_POPUP:
+            //drawPopupMenu(elrs);
+            break;
+        case ELRSLua::MENU_EDIT:
+            display.setCursor(OLED_X_OFFSET + 3, OLED_Y_OFFSET + 12);
+            display.print(param.label);
+            
+            display.drawFrame(0, 14, 72, 26);        
+
+            display.setFont(u8g2_font_NokiaSmallPlain_tr); 
+            display.setCursor(OLED_X_OFFSET + 9, OLED_Y_OFFSET + 30);
+
+            switch (elrs.getCurrentParam().type) {
+                case CRSF_UINT8:
+                case CRSF_INT8:
+                case CRSF_UINT16:
+                case CRSF_INT16:
+                case CRSF_UINT32:
+                case CRSF_INT32:
+                case CRSF_UINT64:
+                case CRSF_INT64:
+                    display.print(elrs.editValue);
+                    display.print(param.units);
+                    break;
+                case CRSF_FLOAT:
+                    floatVal = (float) elrs.editValue / tenToThePowerOf[param.precision];
+                    display.print(floatVal);
+                    break;
+                case CRSF_TEXT_SELECTION:
+                    display.print(param.choices[elrs.editValue].text);
+                    display.print(param.units);
+                case CRSF_STRING:
+                    // No idea how to edit a string parameter - none in ELRS... yet
+                    break;
+                default:
+                    // Do nothing
+                    break;   
+            }
+
+            if (elrs.editValue > param.minVal) {   // Left arrow
+                display.setDrawColor(0);
+                display.drawBox(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 21, 5, 11);
+                display.setDrawColor(1);
+                 display.drawTriangle(OLED_X_OFFSET + 8, OLED_Y_OFFSET + 22,
+                                    OLED_X_OFFSET + 8, OLED_Y_OFFSET + 30,
+                                    OLED_X_OFFSET + 3, OLED_Y_OFFSET + 26);
+            }
+            if (elrs.editValue < param.maxVal) {   // Right Arrow
+                display.setDrawColor(0);
+                display.drawBox(OLED_X_OFFSET + 64, OLED_Y_OFFSET + 21, 5, 11);
+                display.setDrawColor(1);
+                display.drawTriangle(OLED_X_OFFSET + 65, OLED_Y_OFFSET + 22,
+                                    OLED_X_OFFSET + 65, OLED_Y_OFFSET + 30,
+                                    OLED_X_OFFSET + 70, OLED_Y_OFFSET + 26);
+            }
+            break;
+        default: //ELRSLua::MENU_BROWSE
+
+            if (param.id == 0) {
+                // Special handling for menu ID 0 which does not contain any meaningful data
+                display.setFont(u8g2_font_squeezed_b7_tr); 
+
+                if ( strcmp(param.label,"Loading...") == 0 ) {
+                    display.setCursor(OLED_X_OFFSET + 6, OLED_Y_OFFSET + 22);
+                    display.print(param.label);
+                } else {
+                    display.setCursor(OLED_X_OFFSET + 6, OLED_Y_OFFSET + 17);
+                    display.print("ELRS Config Menu");
+                    display.setFont(u8g2_font_NokiaSmallPlain_tr); 
+                    display.setCursor(OLED_X_OFFSET + 6, OLED_Y_OFFSET + 25);
+                    display.print("Pkts: "); display.print(elrs.elrsStatus.packetsGood); display.print("/"); display.print(elrs.elrsStatus.packetsBad);
+                    display.drawTriangle(OLED_X_OFFSET + 31, OLED_Y_OFFSET + 36,
+                                        OLED_X_OFFSET + 39, OLED_Y_OFFSET + 36,
+                                        OLED_X_OFFSET + 35, OLED_Y_OFFSET + 40);
+                }
+            } else {
+                // For all other menu entries, draw nav arrows
+                if (param.id > 0) {                          // Up Arrow
+                    display.setDrawColor(0);
+                    display.drawBox(OLED_X_OFFSET + 30, OLED_Y_OFFSET + 0, 11, 6);
+                    display.setDrawColor(1);
+                    display.drawTriangle(OLED_X_OFFSET + 31, OLED_Y_OFFSET + 5,
+                                        OLED_X_OFFSET + 39, OLED_Y_OFFSET + 5,
+                                        OLED_X_OFFSET + 35, OLED_Y_OFFSET + 0);
+                }
+                if (param.id < elrs.txModule.paramCount) {   // Down Arrrow
+                    display.setDrawColor(0);
+                    display.drawBox(OLED_X_OFFSET + 30, OLED_Y_OFFSET + 35, 11, 6);
+                    display.setDrawColor(1);
+                    display.drawTriangle(OLED_X_OFFSET + 31, OLED_Y_OFFSET + 36,
+                                        OLED_X_OFFSET + 39, OLED_Y_OFFSET + 36,
+                                        OLED_X_OFFSET + 35, OLED_Y_OFFSET + 40);
+                }    
+                if (param.parentFolder > 0) {               // Left Arrow
+                    display.setDrawColor(0);
+                    display.drawBox(OLED_X_OFFSET + 0, OLED_Y_OFFSET + 14, 5, 11);
+                    display.setDrawColor(1);
+                    display.drawTriangle(OLED_X_OFFSET + 4, OLED_Y_OFFSET + 15,
+                                        OLED_X_OFFSET + 4, OLED_Y_OFFSET + 23,
+                                        OLED_X_OFFSET + 0, OLED_Y_OFFSET + 19);
+                }    
+                if (param.type == CRSF_FOLDER) {             // Right Arrow
+                    display.setDrawColor(0);
+                    display.drawBox(OLED_X_OFFSET + 66, OLED_Y_OFFSET + 14, 5, 11);
+                    display.setDrawColor(1);
+                    display.drawTriangle(OLED_X_OFFSET + 67, OLED_Y_OFFSET + 15,
+                                        OLED_X_OFFSET + 67, OLED_Y_OFFSET + 23,
+                                        OLED_X_OFFSET + 71, OLED_Y_OFFSET + 19);
+                    // Continue on to printing the label for the folder
+                    display.setCursor(OLED_X_OFFSET + 6, OLED_Y_OFFSET + 23);
+                    display.print(param.label);
+                } else if (param.type == CRSF_COMMAND || param.type == CRSF_INFO) {
+                    display.setCursor(OLED_X_OFFSET + 6, OLED_Y_OFFSET + 23);
+                    display.print(param.label);
+                } else {
+                    display.setCursor(OLED_X_OFFSET + 6, OLED_Y_OFFSET + 15);
+                    display.print(param.label);
+                    display.setFont(u8g2_font_NokiaSmallPlain_tr);                
+                    display.setCursor(OLED_X_OFFSET + 6, OLED_Y_OFFSET + 30);
+                    display.print(param.choices[param.currentVal].text);
+                }
+            }
+            break;
+    }
+
+    display.sendBuffer();
+}
+
+
+
+
+void drawMessage(char title[], char line1[], char line2[]) {
     // U8g2 full frame buffer drawing process
     display.clearBuffer();
     // Ensure draw color is set to white/on
@@ -268,13 +519,13 @@ void displayMessage(char title[], char line1[], char line2[]) {
     // 1. Title
     // ==========================================
     // 7 pixel high Nokia font for title
-    display.setFont(u8g2_font_nokiafc22_tf); 
+    display.setFont(u8g2_font_squeezed_b6_tr); 
     
     int xOffset = (12 - strlen(title))*7;
     display.setCursor(xOffset + OLED_X_OFFSET, 8 + OLED_Y_OFFSET);
     display.print(title);
     
-    display.setFont(u8g2_font_squeezed_b6_tr); // Back to a tiny font (~5px baseline)
+    display.setFont(u8g2_font_nokiafc22_tf); // Back to a tiny font (~5px baseline)
 
     if(strlen(line2) > 0) {
         display.setCursor(2 + OLED_X_OFFSET, 22 + OLED_Y_OFFSET);
@@ -288,7 +539,7 @@ void displayMessage(char title[], char line1[], char line2[]) {
 }
 
 
-void showCalibrationScreen(int stage, int secondsLeft) {
+void drawCalibrationScreen(int stage, int secondsLeft) {
     display.clearBuffer();
     // Ensure draw color is set to white/on
     display.setDrawColor(1);
@@ -369,4 +620,7 @@ void showCalibrationScreen(int stage, int secondsLeft) {
     // Send the frame buffer to the physical screen hardware
     display.sendBuffer();
 }
+
+
+
 

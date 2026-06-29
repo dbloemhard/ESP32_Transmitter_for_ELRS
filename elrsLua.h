@@ -17,10 +17,22 @@
  */
 #include <Arduino.h>
 #include <stdint.h>
+#include <string.h>
 
 class CRSF;  // Forward Declaration
 
-//#define LUADEBUG
+#define LUADEBUG
+
+#define LABEL_PACKET_RATE               "Packet Rate"
+#define LABEL_TX_POWER_STRING           "TX Power"
+#define LABEL_MAX_POWER                 "Max Power"
+#define LABEL_DYNAMIC_POWER             "Dynamic"
+#define LABEL_BIND_TX                   "Bind"
+#define LABEL_ENABLE_WIFI               "Enable WiFi"
+
+#define STICK_POS_HIGH                  3000
+#define STICK_POS_LOW                   1000
+#define BUTTON_PRESS_DURATION           100
 
 #define CRSF_MAX_PACKET_SIZE            64
 #define CRSF_PAYLOAD_SIZE_MAX           60
@@ -82,7 +94,8 @@ typedef enum
 struct crsfParameter {
     uint8_t id;                       // Field Index (3, 4, 5, etc.)
     uint8_t parentFolder;             // Parent Folder ID (0 for root)
-    crsfValueType type;                     // 0x09 = Select, 0x0B = Folder, etc.
+    crsfValueType type;               // 0x09 = Select, 0x0B = Folder, etc.
+    bool hidden;                      // extracted from the type parameter
     int32_t currentVal;               // Currently active option index 
     int32_t minVal;                   // Used for numeric parameters
     int32_t maxVal;                   // Numeric parameters and String type max length
@@ -120,6 +133,7 @@ struct crsfModule {
     crsfParameter params[CRSF_MAX_PARAMS];
 };
 
+
 class ELRSLua {
 public:
     // Properties
@@ -128,13 +142,27 @@ public:
     crsfModule txModule;
     crsfElrsStatus elrsStatus;
 
+    enum menuMode { MENU_BROWSE, MENU_EDIT, MENU_POPUP };
+    menuMode menuState = MENU_BROWSE;
+    uint8_t selectedParam = 0;
+    int32_t editValue = 0;
+
     // Methods
     ELRSLua(CRSF& crsfInstance);   // initializer - pass in the CRSF instance so it can call its references.
     void update();                 // driver function
+    int findParamByLabel(const char searchString[]) const; // Returns the first parameter that matches the search string, -1 if not found
+    uint8_t nextInFolder();
+    uint8_t prevInFolder();
+    uint8_t enterFolder();
+    uint8_t exitFolder();
+    const crsfParameter& getCurrentParam() const;
+    const crsfParameter& getParam(const uint8_t index) const;
+    void editParamPrev();
+    void editParamNext();
+    void editParamSave();
 
 private:
     CRSF& crsf;  // Reference link to the CRSF instance
-    
     enum crsfConnectState {ELRS_BOOT_DELAY, ELRS_PINGING, ELRS_CONNECTED, ELRS_READY};
     crsfConnectState connectionState = ELRS_BOOT_DELAY;
     bool moduleInfoReceived = false;
@@ -165,3 +193,29 @@ private:
     void parseChoicesString(int paramIndex);
     void clearModule();
 };
+
+/*
+Parent   Index    Label
+0     -  0     -  HooJ  | Menu (ID: 0)
+0     -  1     -  Packet Rate | Choices(0-9): 50Hz(-115dBm), 100Hz Full(-112dBm), 150Hz(-112dBm), 250Hz(-108dBm), 333Hz Full(-105dBm), 500Hz(-105dBm), D250(-104dBm), D500(-104dBm), F500(-104dBm), F1000(-104dBm) | Active Selection: 500Hz(-105dBm)
+0     -  2     -  Telem Ratio | Choices(0-9): Std, Off, 1:128, 1:64, 1:32, 1:16, 1:8, 1:4, 1:2, Race | Active Selection: 1:32 (546bps)
+0     -  3     -  Switch Mode | Choices(0-1): Wide, Hybrid | Active Selection: Wide
+0     -  4     -  Link Mode | Choices(0-1): Normal, MAVLink | Active Selection: Normal
+0     -  5     -  Model Match | Choices(0-1): Off, On | Active Selection: Off (ID: 0)
+0     -  6     -  TX Power (100mW Dyn) | Menu (ID: 6)
+6     -  7     -  Max Power | Choices(0-5): 10, 25, 50, 100, 250, 500 | Active Selection: 100mW
+6     -  8     -  Dynamic | Choices(0-5): Off, Dyn, AUX9, AUX10, AUX11, AUX12 | Active Selection: Dyn
+0     -  9     -  VTX Administrator | Menu (ID: 9)
+9     -  10    -  Band | Choices(0-6): Off, A, B, E, F, R, L | Active Selection: Off
+9     -  11    -  Channel (1-8): 1
+9     -  12    -  Pwr Lvl | Choices(0-8): -, 1, 2, 3, 4, 5, 6, 7, 8 | Active Selection: -
+9     -  13    -  Pitmode | Choices(0-21): Off, On, AUX1�, AUX1�, AUX2�, AUX2�, AUX3�, AUX3�, AUX4�, AUX4�, AUX5�, AUX5�, AUX6�, AUX6�, AUX7�, AUX7�, AUX8�, AUX8�, AUX9�, AUX9�, AUX10�, AUX10� | Active Selection: Off
+9     -  14    -  Send VTx | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+0     -  15    -  WiFi Connectivity | Menu (ID: 15)
+15    -  16    -  Enable WiFi | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+15    -  17    -  Enable Rx WiFi | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+0     -  18    -  BLE Joystick | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+0     -  19    -  Bind | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+0     -  20    -  Bad/Good | Info String: 0/126
+0     -  21    -  3.6.0 ISM
+*/

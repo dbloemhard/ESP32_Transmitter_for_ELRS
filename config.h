@@ -35,7 +35,6 @@ int Is_Aileron_Reverse  =1;
 int Is_Elevator_Reverse =0;
 int Is_Throttle_Reverse =1;
 int Is_Rudder_Reverse   =0;
-int Is_Arm_Reverse   =0;
 
 // Active buzzer only plays one tone (often used on Flight controllers as a beeper)
 // Can also use a vibrator motor
@@ -49,8 +48,11 @@ const float BEEPING_VOLTAGE = 3.5; // 2S Lipo 3.5v per cell
 const float ON_USB = 4.5;          // On USB power / no battery
 
 // Define Commond for start Up Setting
-#define RC_MIN_COMMAND 600
-#define RC_MAX_COMMAND 1400
+// #define RC_MIN_COMMAND 600
+// #define RC_MAX_COMMAND 1400
+// ~50% stick deflection
+#define RC_MIN_COMMAND 255
+#define RC_MAX_COMMAND 767
 
 // Define stick unmove alarm time
 #define STICK_ALARM_TIME 300000 // 300s or 5 minutes
