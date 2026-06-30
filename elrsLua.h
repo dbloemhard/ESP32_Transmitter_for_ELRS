@@ -21,7 +21,7 @@
 
 class CRSF;  // Forward Declaration
 
-#define LUADEBUG
+// #define LUADEBUG
 
 #define LABEL_PACKET_RATE               "Packet Rate"
 #define LABEL_TX_POWER_STRING           "TX Power"

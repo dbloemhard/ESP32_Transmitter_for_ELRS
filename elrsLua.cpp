@@ -594,7 +594,7 @@ uint8_t ELRSLua::nextInFolder() {
     for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {
         if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
             selectedParam = i;
-            return 2; // Moved down
+            return 1; // Moved down, scroll up
         }
     }
     // if we got here it means there were no other entries at this folder level
@@ -615,7 +615,7 @@ uint8_t ELRSLua::prevInFolder() {
     for (uint8_t i = selectedParam - 1; i >= 0; i--) {
         if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
             selectedParam = i;
-            return 1;
+            return 2; // Moved up, scroll down
         }
     }
     // if we got here it means there were no other entries at this folder level
@@ -635,7 +635,7 @@ uint8_t ELRSLua::enterFolder() {
     for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {  // Assume child items will follow folder
         if (txModule.params[i].parentFolder == selectedParam && !txModule.params[i].hidden) {
             selectedParam = i;
-            return 4;
+            return 3; // Scroll left
         }
     }
     // not found (unexpected), dont updated selected param and return 'no move'
@@ -652,7 +652,7 @@ uint8_t ELRSLua::exitFolder() {
         }
     } else {
         selectedParam = txModule.params[selectedParam].parentFolder;
-        return 3;
+        return 4;  // Scroll right
     }
 }
 
@@ -662,7 +662,18 @@ const crsfParameter& ELRSLua::getCurrentParam() const {
 
 const crsfParameter& ELRSLua::getParam(const uint8_t index) const {
     if (ready() && txModule.paramsLoaded && index >= 0 && index < txModule.paramCount) {
-        return txModule.params[index]; // Returns a reference directly to the array item
+        if (index == 0) {  // Special handling for index 0
+            static crsfParameter MenuTitle;
+            MenuTitle.id = 0;
+            MenuTitle.parentFolder = 0;
+            MenuTitle.type = CRSF_TEXT_SELECTION;
+            strcpy(MenuTitle.label, "ELRS Config");
+            snprintf(MenuTitle.choices[0].text, sizeof(MenuTitle.choices[0].text), "Pkts: %u/%u", elrsStatus.packetsGood, elrsStatus.packetsBad);
+            MenuTitle.currentVal = 0;
+            return MenuTitle;
+        } else {
+            return txModule.params[index]; // Returns a reference directly to the array item
+        }
     } else {
         static crsfParameter notFound;
         notFound.id = 0;
@@ -765,13 +776,10 @@ void ELRSLua::editParamSave() {
 
 void ELRSLua::loadAllParams(uint8_t totalCount) {
     loadQueue.clear();
-    //Serial.print("Loading "); Serial.print(totalCount); Serial.println("items");
     // Push backward so they pop in ascending order (1, 2, 3...)
     for (int i = totalCount; i >= 0; i--) {
         loadQueue.push(i);
-        Serial.print(i); Serial.print(", ");
     }
-    //Serial.println("(end)");
     connectionState = ELRS_LOAD_PARAMS; 
 }
 
@@ -858,7 +866,6 @@ void ELRSLua::update() {
 #endif
             }
             if (now - lastParameterQueryTime > 500) {
-                Serial.print("now: "); Serial.print(now); Serial.print(". LastParameterQueryTime: "); Serial.println(lastParameterQueryTime);
                 if (currentSettingsIndex != -1) {
                     // if (now - lastParameterQueryTime > 500) {
                         requestSetting(currentSettingsIndex, currentChunk); // Retry last setting, or get next chunk
