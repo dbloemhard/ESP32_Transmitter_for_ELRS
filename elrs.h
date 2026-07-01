@@ -21,7 +21,7 @@
 
 class CRSF;  // Forward Declaration
 
-// #define LUADEBUG
+// #define ELRSDEBUG
 
 #define LABEL_PACKET_RATE               "Packet Rate"
 #define LABEL_TX_POWER_STRING           "TX Power"
@@ -167,7 +167,7 @@ struct crsfModule {
 };
 
 
-class ELRSLua {
+class ELRS {
 public:
     // Properties
     bool ready() const { return connectionState == ELRS_READY; }
@@ -181,7 +181,7 @@ public:
     int32_t editValue = 0;
 
     // Methods
-    ELRSLua(CRSF& crsfInstance);   // initializer - pass in the CRSF instance so it can call its references.
+    ELRS(CRSF& crsfInstance);   // initializer - pass in the CRSF instance so it can call its references.
     void update();                 // driver function
     int findParamByLabel(const char searchString[]) const; // Returns the first parameter that matches the search string, -1 if not found
     uint8_t nextInFolder();

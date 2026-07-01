@@ -15,17 +15,17 @@
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#include "elrsLua.h"
+#include "elrs.h"
 #include "crsf.h" // Needed here so the compiler knows the methods inside CRSF
 
 // Initialize the reference via the initializer list
-ELRSLua::ELRSLua(CRSF& crsfInstance) : crsf(crsfInstance) {}
+ELRS::ELRS(CRSF& crsfInstance) : crsf(crsfInstance) {}
 
 
 // Command builder functions
 // ========================================================
 
-void ELRSLua::sendCommand(uint8_t command, uint8_t value) {
+void ELRS::sendCommand(uint8_t command, uint8_t value) {
     uint8_t packetCmd[CRSF_CMD_PACKET_SIZE];
 
     packetCmd[0] = MODULE_ADDRESS;
@@ -38,7 +38,7 @@ void ELRSLua::sendCommand(uint8_t command, uint8_t value) {
     packetCmd[7] = 0; // CRC calculated by the queue function
 
     crsf.crsfQueuePacket(packetCmd,CRSF_CMD_PACKET_SIZE);
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
     Serial.print("[ELRS] -> Send Command: ");
     Serial.print(command);
     Serial.print(", Value: ");
@@ -46,7 +46,7 @@ void ELRSLua::sendCommand(uint8_t command, uint8_t value) {
 #endif
 }
 
-void ELRSLua::pingDevices() {
+void ELRS::pingDevices() {
     uint8_t packetCmd[6];
 
     packetCmd[0] = MODULE_ADDRESS;
@@ -59,7 +59,7 @@ void ELRSLua::pingDevices() {
     crsf.crsfQueuePacket(packetCmd, 6);
 }
 
-void ELRSLua::requestSetting(uint8_t settingIndex, uint8_t chunk) {
+void ELRS::requestSetting(uint8_t settingIndex, uint8_t chunk) {
     uint8_t packetCmd[8];
 
     packetCmd[0] = MODULE_ADDRESS;        // 0xEE (Target Device: External TX Module)
@@ -73,7 +73,7 @@ void ELRSLua::requestSetting(uint8_t settingIndex, uint8_t chunk) {
 
     //crsfWritePacket(packetCmd, 8);
     crsf.crsfQueuePacket(packetCmd, 8);
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
     Serial.print("[ELRS] -> Querying Menu Parameter Index: ");
     Serial.print(settingIndex);
     Serial.print(", chunk: ");
@@ -82,7 +82,7 @@ void ELRSLua::requestSetting(uint8_t settingIndex, uint8_t chunk) {
 }
 
 // Request Info Message by sending ELRS_SETTINGS_WRITE (0x2D) with param/value 0
-void ELRSLua::requestElrsStatus() {
+void ELRS::requestElrsStatus() {
     sendCommand(0,0);
 }
 
@@ -90,7 +90,7 @@ void ELRSLua::requestElrsStatus() {
 // Response Parser functions
 // ========================================================
 
-void ELRSLua::parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
+void ELRS::parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
   // Clear any existing stored text profile settings
   memset(txModule.name, 0, sizeof(txModule.name)); 
 
@@ -126,7 +126,7 @@ void ELRSLua::parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
 
     // reset the currently loaded count
     txModule.paramCount = 0;
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
     // Debug output
     Serial.println("============ [ELRS DEVICE DETECTED] ============");
     Serial.print("Module Name         : "); Serial.println(txModule.name);
@@ -141,7 +141,7 @@ void ELRSLua::parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
 }
 
 
-void ELRSLua::parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length) {
+void ELRS::parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length) {
     static uint8_t tempParamStorage[CRSF_PAYLOAD_SIZE_MAX * 5]; 
     static uint16_t tempStorageIndex = 0;
     static uint8_t expectedChunksRemain = 0;
@@ -218,7 +218,7 @@ void ELRSLua::parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length) {
 
 }
 
-void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
+void ELRS::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
   uint8_t currentIdx = 5;
   uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
 
@@ -264,7 +264,7 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
                 txModule.params[slot].units[unitCharCount++] = (char)rxBuffer[currentIdx++];
             }
             txModule.params[slot].units[unitCharCount] = '\0';  
- #ifdef LUADEBUG        
+ #ifdef ELRSDEBUG        
             Serial.print("[PARAMETER SAVED] ");
             Serial.print(txModule.params[slot].label);
             Serial.print(" ("); Serial.print(txModule.params[slot].minVal); 
@@ -312,7 +312,7 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
               txModule.params[slot].units[unitCharCount] = '\0';      
 
               parseChoicesString(slot);
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
               Serial.print("[PARAMETER SAVED] ");
               Serial.print(txModule.params[slot].label);
               Serial.print(" | Choices("); Serial.print(txModule.params[slot].minVal); Serial.print("-"); Serial.print(txModule.params[slot].maxVal); Serial.print("): ");
@@ -335,7 +335,7 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
             else {
               // Data payload remains chunked, increment block indicators to fetch remaining parts
               currentChunk++;
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
               Serial.print("Chunk stored");
               //Serial.print("Chunk stored. Current string: "); Serial.println(txModule.params[slot].valueString);
 #endif
@@ -345,7 +345,7 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
             // Menu folder containing sub-items
             // Theoretically this could be chunked too, but not done in ELRS (Yet)
             // if (chunksRemaining == 0) {
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
             Serial.print("[PARAMETER SAVED] ");
             Serial.print(txModule.params[slot].label);
             Serial.print(" | Menu (ID: "); Serial.print(txModule.params[slot].id); Serial.println(")");
@@ -361,7 +361,7 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
               txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount++] = (char)rxBuffer[currentIdx++];
             }
             txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount] = '\0';
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
             Serial.print("[PARAMETER SAVED] ");
             Serial.print(txModule.params[slot].label);
             Serial.print(" | Info String: "); Serial.println(txModule.params[slot].valueString);
@@ -385,7 +385,7 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
             txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount] = '\0';
             // txModule.params[slot].valueStringCharCount--; // Decrement the valueString char counter because the loop above insists on picking up the crc byte in chunked params
 
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
             Serial.print("[PARAMETER SAVED] ");
             Serial.print(txModule.params[slot].label);
             Serial.print(" | Command (Current state "); 
@@ -423,7 +423,7 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
         default:
             // String, Float or Int types defined in spec but not used in ELRS
             // Move on to process the next sequential hardware parameter tree setting
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
             Serial.print("Unhanded info packet type. Packet data: ");
             for (int i = 0; i < length; i++){
               Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
@@ -438,11 +438,11 @@ void ELRSLua::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
   }
 }
 
-void ELRSLua::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
+void ELRS::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
     // rxBuffer[3] = destination (handset, 0xEF/0xEA), rxBuffer[4] = source (TX module, 0xEE).
     // Discard frames not originating from the ELRS TX module address.
     if (rxBuffer[4] != MODULE_ADDRESS) {
-#ifdef LUADEBUG  
+#ifdef ELRSDEBUG  
     Serial.print("\nUnexpected Origin Address in Link Stats Packet (0x2E):    0x"); Serial.println(rxBuffer[4], HEX);
 #endif
         return;
@@ -461,7 +461,7 @@ void ELRSLua::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
     }
     elrsStatus.statusMessage[charCounter] = '\0';
 
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
     // Debug output
     Serial.println("\n============ [ELRS LINK STATUS 0x2E] ============");
     // Serial.print("Raw Data            : ");
@@ -490,7 +490,7 @@ void ELRSLua::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
 // Response Parser functions
 // ========================================================
 
-void ELRSLua::clearModule() {
+void ELRS::clearModule() {
     memset(txModule.name, 0, sizeof(txModule.name));   
     for (int i = 0; i < txModule.paramCount; i++) {
         txModule.params[i].id = 0;
@@ -510,7 +510,7 @@ void ELRSLua::clearModule() {
     // serialNumber, hwVersion, swVersion, protocolVersion will be reset when a module is next detected
 }
 
-void ELRSLua::parseChoicesString(int paramIndex) {
+void ELRS::parseChoicesString(int paramIndex) {
     uint8_t currentIdx = 0;
     uint8_t activeOptionSlot = 0;
     uint8_t charCount = 0;
@@ -545,7 +545,7 @@ void ELRSLua::parseChoicesString(int paramIndex) {
    
 }
 
-int ELRSLua::getParamSlot(uint8_t id) {
+int ELRS::getParamSlot(uint8_t id) {
     // 1. Search if this parameter ID is already initialized
     for (int i = 0; i < txModule.paramCount; i++) {
         if (txModule.params[i].id == id) return i;
@@ -588,7 +588,7 @@ int ELRSLua::getParamSlot(uint8_t id) {
 // 2 = Down
 // 3 = Left
 // 4 = Right
-uint8_t ELRSLua::nextInFolder() {
+uint8_t ELRS::nextInFolder() {
     uint8_t parentFolder = txModule.params[selectedParam].parentFolder;
 
     for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {
@@ -609,7 +609,7 @@ uint8_t ELRSLua::nextInFolder() {
     return 0;
 }
 
-uint8_t ELRSLua::prevInFolder() {
+uint8_t ELRS::prevInFolder() {
     uint8_t parentFolder = txModule.params[selectedParam].parentFolder;
 
     for (uint8_t i = selectedParam - 1; i >= 0; i--) {
@@ -630,7 +630,7 @@ uint8_t ELRSLua::prevInFolder() {
     return 0;
 }
 
-uint8_t ELRSLua::enterFolder() {
+uint8_t ELRS::enterFolder() {
     if (txModule.params[selectedParam].type != CRSF_FOLDER) return 0;
     for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {  // Assume child items will follow folder
         if (txModule.params[i].parentFolder == selectedParam && !txModule.params[i].hidden) {
@@ -642,7 +642,7 @@ uint8_t ELRSLua::enterFolder() {
     return 0;
 }
 
-uint8_t ELRSLua::exitFolder() {
+uint8_t ELRS::exitFolder() {
     if (txModule.params[selectedParam].parentFolder == 0) {
         if (selectedParam > 0) { // pressing left brings you back to the top of the menu
             selectedParam = 0;
@@ -656,11 +656,11 @@ uint8_t ELRSLua::exitFolder() {
     }
 }
 
-const crsfParameter& ELRSLua::getCurrentParam() const {
+const crsfParameter& ELRS::getCurrentParam() const {
     return getParam(selectedParam);
 }
 
-const crsfParameter& ELRSLua::getParam(const uint8_t index) const {
+const crsfParameter& ELRS::getParam(const uint8_t index) const {
     if (ready() && txModule.paramsLoaded && index >= 0 && index < txModule.paramCount) {
         if (index == 0) {  // Special handling for index 0
             static crsfParameter MenuTitle;
@@ -684,7 +684,7 @@ const crsfParameter& ELRSLua::getParam(const uint8_t index) const {
     }
 }
 
-int ELRSLua::findParamByLabel(const char searchString[]) const {
+int ELRS::findParamByLabel(const char searchString[]) const {
     for (uint8_t i = 1; i < txModule.paramCount; i++) {
         if (strncmp(txModule.params[i].label, searchString, strlen(searchString)) == 0 ) {
             return i;
@@ -694,7 +694,7 @@ int ELRSLua::findParamByLabel(const char searchString[]) const {
 }
 
 // Edit Param functions
-void ELRSLua::editParamPrev() { 
+void ELRS::editParamPrev() { 
     switch(txModule.params[selectedParam].type) {
         case CRSF_UINT8:
         case CRSF_INT8:
@@ -721,7 +721,7 @@ void ELRSLua::editParamPrev() {
     }
 }
 
-void ELRSLua::editParamNext() {
+void ELRS::editParamNext() {
     switch(txModule.params[selectedParam].type) {
         case CRSF_UINT8:
         case CRSF_INT8:
@@ -748,7 +748,7 @@ void ELRSLua::editParamNext() {
     }
 }
 
-void ELRSLua::editParamSave() {
+void ELRS::editParamSave() {
     sendCommand(selectedParam, editValue); // This will queue the command to update the parameter
     txModule.params[selectedParam].currentVal = editValue; // updating the local value manually - will update via the refreshStack too
     
@@ -774,7 +774,7 @@ void ELRSLua::editParamSave() {
 }
 
 
-void ELRSLua::loadAllParams(uint8_t totalCount) {
+void ELRS::loadAllParams(uint8_t totalCount) {
     loadQueue.clear();
     // Push backward so they pop in ascending order (1, 2, 3...)
     for (int i = totalCount; i >= 0; i--) {
@@ -783,7 +783,7 @@ void ELRSLua::loadAllParams(uint8_t totalCount) {
     connectionState = ELRS_LOAD_PARAMS; 
 }
 
-void ELRSLua::loadOneParam(uint8_t paramIndex) {
+void ELRS::loadOneParam(uint8_t paramIndex) {
     if (loadQueue.push(paramIndex)) {
         // Intercept READY state and force a background cycle if needed
         if (connectionState == ELRS_READY) {
@@ -795,14 +795,14 @@ void ELRSLua::loadOneParam(uint8_t paramIndex) {
 // Main driver function
 // ========================================================
 
-void ELRSLua::update() {
+void ELRS::update() {
     // First poll for incoming telemetry packets
     if (crsf.telemetryQueue.hasItems()) {
       crsfPacket telemetryPacket;
       if (crsf.telemetryQueue.pop(telemetryPacket)) {
         // Queued packets should be something we are interested in here!
         uint8_t packetType = telemetryPacket.data[2];
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
         Serial.print("Received Packet type 0x"), Serial.println(packetType,HEX);
 #endif
         switch (packetType) {
@@ -836,7 +836,7 @@ void ELRSLua::update() {
             if (now - lastHandshakeTime > 1000) {
                 lastHandshakeTime = now;
                 pingDevices(); // Sends 0x28
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
                 Serial.println("[ELRS] Sending Device Ping (0x28)...");
 #endif
             }
@@ -861,7 +861,7 @@ void ELRSLua::update() {
             if (now - lastHandshakeTime > 1000) {
                 lastHandshakeTime = now;
                 requestElrsStatus();
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
                 Serial.println("[ELRS] Sending LinkStat Request (0x2D, 0, 0)...");
 #endif
             }
@@ -894,7 +894,7 @@ void ELRSLua::update() {
             if (now - lastHandshakeTime > 1000) {
                 lastHandshakeTime = now;
                 requestElrsStatus();
-#ifdef LUADEBUG        
+#ifdef ELRSDEBUG        
                 Serial.println("[ELRS] Sending LinkStat Request (0x2D, 0, 0)...");
 #endif
             }

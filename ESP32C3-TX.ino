@@ -26,7 +26,7 @@
 #include "hardware.h"
 #include "config.h"
 #include "crsf.h"
-#include "elrsLua.h"
+#include "elrs.h"
 #include "oled.h"
 
 //#define DEBUG // if not commented out, Serial.print() is active! For debugging only!!
@@ -89,7 +89,7 @@ uint32_t lastModuleRequestTime = 0;
 CRSF crsfClass;
 
 // Instantiate application layer, passing driver object to it
-ELRSLua elrsLua(crsfClass);
+ELRS elrsClass(crsfClass);
 
 // -----------------------------------------------------------------------------------------------------
 // Calibration
@@ -683,7 +683,7 @@ void statusDisplay(){
             }
         } else {
             if (currentScreen == ELRS_MENU) {
-                navigateELRSMenu(elrsLua, navigate);
+                navigateELRSMenu(elrsClass, navigate);
             } else if (currentScreen == CHANNEL_MENU) {
                 //navigateChannelMenu(navigate);
             } else if (navigate == 6) {
@@ -711,16 +711,16 @@ void statusDisplay(){
                 drawHomeScreen(batteryVoltage, connectionState, crsfClass.linkStats.uplinkLQ, currentValues,ADC_MIN,ADC_MAX);
                 break;
             case ELRS_STATS: 
-                drawElrsStatsScreen(elrsLua);
+                drawElrsStatsScreen(elrsClass);
                 break; 
             case ELRS_MENU: 
-                drawElrsMenuScreen(elrsLua);
+                drawElrsMenuScreen(elrsClass);
                 break; 
             // case CHANNEL_OUTPUTS: 
             //     drawChannelOutputsScreen(rcChannels);
             //     break;
             // case CHANNEL_MENU: 
-            //     drawChannelMenuScreen(elrsLua);
+            //     drawChannelMenuScreen(elrsClass);
             //     break; 
             // case BT_JOYSTICK: 
             //     drawBtJoystickScreen();
@@ -900,7 +900,7 @@ void loop()
 
         // -------------------------------------------------
         // Poll the telemetry data and run lua script logic
-        elrsLua.update();       
+        elrsClass.update();       
 
         // --------------------------------
         // Send RC data to external module

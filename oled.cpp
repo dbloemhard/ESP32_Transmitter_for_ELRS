@@ -221,7 +221,7 @@ void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t
     lastScreen = currentScreen;
 }
 
-void drawElrsStatsScreen(const ELRSLua& elrs) {
+void drawElrsStatsScreen(const ELRS& elrs) {
       // U8g2 full frame buffer drawing process
       display.clearBuffer();
 
@@ -373,7 +373,7 @@ const unsigned long ANIM_DURATION = 500; // Transition duration in milliseconds
 static int prevMenuItemIndex = 0;   // Track where we came from
 static int currentMenuItemIndex = 0;// Track where we are going
 
-void animateMenu(const ELRSLua& elrs) {
+void animateMenu(const ELRS& elrs) {
     if (activeAnimation == 0) {
         // Standard State: No active transition requested, render static layout normally
         drawMenuItem(elrs.getCurrentParam(), 0, 0);
@@ -431,11 +431,11 @@ void animateMenu(const ELRSLua& elrs) {
 // 5 = Joystick button
 // 6 = Built in button (short press)
 // 7 = Built in button (long press)
-void navigateELRSMenu(ELRSLua &elrs, uint8_t direction) {
+void navigateELRSMenu(ELRS &elrs, uint8_t direction) {
     uint8_t nextAnimation;
     if (direction == 0) return;
     switch (elrs.menuState) {
-        case ELRSLua::MENU_BROWSE:
+        case ELRS::MENU_BROWSE:
             nextAnimation = 0;
             switch (direction) {
                 case 1:
@@ -467,7 +467,7 @@ void navigateELRSMenu(ELRSLua &elrs, uint8_t direction) {
                         case CRSF_TEXT_SELECTION:
                         case CRSF_STRING:
                             elrs.editValue = elrs.getCurrentParam().currentVal;
-                            elrs.menuState = ELRSLua::MENU_EDIT;  // Change to edit mode
+                            elrs.menuState = ELRS::MENU_EDIT;  // Change to edit mode
                             break;
                         default:
                             // Do nothing
@@ -476,7 +476,7 @@ void navigateELRSMenu(ELRSLua &elrs, uint8_t direction) {
                     break;
                 case 6:
                     elrs.selectedParam = 0;
-                    elrs.menuState = ELRSLua::MENU_BROWSE;
+                    elrs.menuState = ELRS::MENU_BROWSE;
                     currentScreen = ELRS_STATS;  // Exit out of the menu
                     break;
                     // 7/Long press not handled in menu
@@ -491,7 +491,7 @@ void navigateELRSMenu(ELRSLua &elrs, uint8_t direction) {
                 currentMenuItemIndex = elrs.selectedParam;
             }            
             break;
-        case ELRSLua::MENU_EDIT:
+        case ELRS::MENU_EDIT:
             switch (direction) {
                 case 3:
                     elrs.editParamPrev();
@@ -504,11 +504,11 @@ void navigateELRSMenu(ELRSLua &elrs, uint8_t direction) {
                     break;
                 case 6:
                     elrs.editValue = elrs.getCurrentParam().currentVal; // reset selection
-                    elrs.menuState = ELRSLua::MENU_BROWSE;  // Go back to browse mode
+                    elrs.menuState = ELRS::MENU_BROWSE;  // Go back to browse mode
                     break;
             }
             break;
-        case ELRSLua::MENU_POPUP:
+        case ELRS::MENU_POPUP:
             switch (direction) {
                 case 5:
                     //elrs.sendCommandConfirm(elrs.currentParam);  // Confirm/execute
@@ -522,8 +522,8 @@ void navigateELRSMenu(ELRSLua &elrs, uint8_t direction) {
 }
 
 
-void drawElrsMenuScreen(const ELRSLua& elrs) {
-//void drawELRSMenu(const ELRSLua& elrs) {
+void drawElrsMenuScreen(const ELRS& elrs) {
+//void drawELRSMenu(const ELRS& elrs) {
     static int menuIndex;
     static const int tenToThePowerOf[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
     float floatVal;
@@ -534,10 +534,10 @@ void drawElrsMenuScreen(const ELRSLua& elrs) {
     display.setFont(u8g2_font_NokiaSmallPlain_tr);    
     
     switch (elrs.menuState) {
-        case ELRSLua::MENU_POPUP:
+        case ELRS::MENU_POPUP:
             //drawPopupMenu(elrs);
             break;
-        case ELRSLua::MENU_EDIT:
+        case ELRS::MENU_EDIT:
             display.setCursor(OLED_X_OFFSET + 3, OLED_Y_OFFSET + 12);
             display.print(param.label);
             
@@ -592,7 +592,7 @@ void drawElrsMenuScreen(const ELRSLua& elrs) {
             break;
 
 
-        default: //ELRSLua::MENU_BROWSE
+        default: //ELRS::MENU_BROWSE
 
             // Draw navigation arrows
             if (param.id > 0) {                          // Up Arrow
