@@ -1,11 +1,13 @@
-# ESP32 C3 Simple TX
-ESP32 C3 Port of the Simple TX Arduino Transmitter project, with a few extra features.
+# ESP32 C3 Nano TX
+<img width="579" height="616" alt="image" src="https://github.com/user-attachments/assets/e5a0a2bb-08a6-49ff-bc16-0ad2317f77ac" />
+ESP32 C3 Nano sized ExpressLRS transmitter originally based on the Simple TX Arduino Transmitter project, with a few extra features.
 
 Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an RC transmitter (soft and hardware) that is simple to build, and use.
 
 I am rewriting it to run on an ESP32 C3. This has an OLED screen and is small enough to make my TinyTX project even smaller. I am reading telemetry from the ELRS module, to display, and modify as required
 
 # THIS IS A W.I.P.
+https://youtube.com/shorts/-rPwNI36CTY?feature=share
 The radio works, and i have flown around my room with it. ELRS transmitter telemetry is working, and the configuration menu is usable to change ELRS settings. Command menu items (Bind, enable wifi) are not currently implemented. 3D print design could be better - The version 2 i uploaded does not print well on my printer, and the initial version needs to be glued together.
 
 Currently outstanding code tasks:
@@ -21,12 +23,6 @@ Programmed in Arduino IDE since that is simple.
 2. then select ESP32C3 Dev Module board
 3. USB CDC On Boot "Enabled"
 4. Build and upload.
-
-<img width="579" height="616" alt="image" src="https://github.com/user-attachments/assets/e5a0a2bb-08a6-49ff-bc16-0ad2317f77ac" />
-
-video:
-
-https://youtube.com/shorts/-rPwNI36CTY?feature=share
 
 # Features:
 - Fits in your pocket. Not like the Radio Master Pocket which will get you funny looks... Actually pocketable.
