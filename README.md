@@ -6,7 +6,15 @@ Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an
 I am rewriting it to run on an ESP32 C3. This has an OLED screen and is small enough to make my TinyTX project even smaller. I am reading telemetry from the ELRS module, to display, and modify as required
 
 # THIS IS A W.I.P.
-Currently untested. ELRS transmitter telemetry is working, and the configuration items are being loaded, but I havent coded the menu navigation or changing settings.
+The radio works, and i have flown around my room with it. ELRS transmitter telemetry is working, and the configuration menu is usable to change ELRS settings. Command menu items (Bind, enable wifi) are not currently implemented. 3D print design could be better - The version 2 i uploaded does not print well on my printer, and the initial version needs to be glued together.
+
+Currently outstanding code tasks:
+* Finish Implementing command item support in ELRS menu (popup window)
+* Move crsfParameter into its own class so that i can reuse it for the handset configuration menu
+* Implement channel output monitor screen
+* Implement handset configuration menu - mode change (1,2), channel reverse, expo, output limit. Will use the ELRS menu structure and crsfParams for storing the options since this is working well for ELRS items.
+* Bluetooth joystick using Bluepad32 library (RX as a TX does not suport BLE Joystick so need to implement it myself)
+* Bluetooth transmitter?? Connect bluetooth joysticks to this device and forward controls to the ELRS transmitter
 
 Programmed in Arduino IDE since that is simple. 
 1. Install the ESP32 Boards via board manager
@@ -14,233 +22,31 @@ Programmed in Arduino IDE since that is simple.
 3. USB CDC On Boot "Enabled"
 4. Build and upload.
 
-
-
-
-![微信图片_20220213205906](https://user-images.githubusercontent.com/43392862/153756463-16c5e99b-b1b6-4f23-9fea-cefb4bb9df04.jpg)
-
+<img width="579" height="616" alt="image" src="https://github.com/user-attachments/assets/e5a0a2bb-08a6-49ff-bc16-0ad2317f77ac" />
 
 video:
 
-https://www.youtube.com/watch?v=BPLFkZUoV28
+https://youtube.com/shorts/-rPwNI36CTY?feature=share
 
 # Features:
-- Support ExpressLRS 2.4G external TX module
-- Up to 500Hz packet rate
-- 4 analog channel
-- 4 AUX channel
-
-This project includes code, stl file for transmitter shell and pcb board, you can easily diy your own rc transmitter from arduino development board in a very simple way.
-
-I have tested for 6 month since the first prototype (mod from an old Devo7), it works pretty well.
-
- * Simple TX is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY. 
-
-I use superslim module in the shell, but any esp32 based tx module should be working.
-
-It was tested for ELRS 1.0 and 2.0.
-
-### Update:
-
-### The development was moved to VS code 
-
-### 2022/11/5 Move IDE to VSCODE and Arduino Extension
-
-Add buzzer support on pin 6
-
-The PIO becomes unusable dude to unstalbe network, so I switch back to arduino extension, still in VSCODE, because the original Arduino IDE is low efficient.
-
-The code still works in Arduino IDE, you can compile in both enviroment
-
-The PIO will be saved in a seprate branch and will unliked be updated
-
-### 2022/6/3 Optimize Calibration
-
-1. Add center stick calibration
-2. Optimze channel reverse
-	use 4 values to handdle reverse in config.h
-	
-// Define Reverse 1 = reverse, 0 = normal
-	
-Is_Aileron_Reverse  =1;
-	
-Is_Elevator_Reverse =1;
-	
-Is_Throttle_Reverse =0;
-	
-Is_Rudder_Reverse   =0;
-
-### 2022/5/29 Calibration added
-
-Calibration function added by erstec in Platformio_test_branch, thanks
-
-1. enter debug mode by uncomment #define DEBUG
-2. flash firmware to arduino nano
-4. open serial monitor at 115200 baud, center stick and keep for 5 seconds
-5. move stick full range within 20 seconds untill you see "Calibration Done"
-6. comment //#define DEBUG and flash firmware to arduino nano
-7. test in bf configurator
-8. done
-
-### 2022/4/6 Test branch
-
-platformio
-
-
-### Update Log 2022/4/3
-
-Add Test branch for ppm output
-
-
-### Update Log 2022/3/26
-
-Update STL File：
-
-Solve gimbal & switch interference
-
-Add battery tray
-
-![ASSEMBLE](https://user-images.githubusercontent.com/43392862/160218062-a254729a-f0f7-474e-8428-6ba044f421b5.jpg)
-
-
-
-### Update Log 2022/3/20
-
-
-
-Update PPM to ELRS library, siginal is more stable, still need more test
-
-
-https://github.com/kkbin505/Arduino-Transmitter-for-ELRS/tree/main/PPMtoCRSF
-
-
-
-### Update Log V0.9.3
-Increase baud rate to 400K
-
-*** In 400k baud, theoretical maxmum packet rate is 500Hz (400000/320bit per second, 1.6ms per frame). RC data pcket is 32byte=320bit(plus 1 start bit and 1 end bit).
-
-Now simpleTX is supporting 500Hz
-
-Add 3rd pre seeting for 500Hz 25mW
-
-Gestrue:
-Hold AILERON left and ELEVATOR up at power up.
-
-### Update Log V0.9.2
-Update cmd to elrs 2.0 (power setting commond of 2.0 is different from 1.0)
-
-Re write gimbal calibation method, add center stick offset in config file
-
-
-### Update Log V0.9.1
-Add 2 pre settings for power and package rate:
-
-
-Now you can enter setting 1 and 2 by gesutre:
-
-Setting 1:
-//250Hz 25mW
-
-Hold AILERON left and ELEVATOR down at power up.
-
-Setting 2:
-//150Hz 100mW
-
-Hold AILERON right and ELEVATOR up at power up.
-
-Center stick will keep your previous setting.
-
-
-Due to the hardware limitation of the ATMega328p, the follow functions are not supported:
-
-* The 328p do not support inverted UART (which OpenTX use), there are 2 options:
-	1. Tun  UART_INVERTED off.
-	2. Adding a digital invert IC (I tested with SN74LS06N)
-
-** Telemetray is off, 328p do not support half duplex.
-
-
-
-The uart logic voltage of ESP32 is 3.3V, my ATMega328p is 5V. However mine TX work fine, it seems ESP32 UART is 5V tolerance.
-
-#### Tips
-Default RC channel order is AETR, you can change channel order whatever you like, by changing the RC channel order.
-Current gimbal calibratin method is complex (but you need to do only once):
-- Enter debug mode by delete "//" before #define DEBUG
-- Flash with arduino IDE
-- Open serialmonitor change baud rate to 115200
-- Record max and min RC channel value and write in map() function (reverse order if neede)
-   example:map(Aileron_value,893,223,RC_CHANNEL_MIN,RC_CHANNEL_MAX)
-- Add "//" back before #define DEBUG
-- Flash with arduino IDE
-
-There are many amazing Expreslrs handset. But I want a simple arduino based transmitter for my DIY 2.4G external TX module.
-
-https://youtu.be/PrfSfnqcBgk
-
-### Add PCB V0.9
-
-
-I replace the control board with my PCB and system.
-
-
-![微信图片_20220123195005](https://user-images.githubusercontent.com/43392862/150677082-80ab29c4-f2e4-475e-a4b3-db004aeacba5.jpg)
-
-
-### 1. Project Intro:
-
-### 1.1 Hardware (PCB)
-
-In PCB folder, you can find the PCB and BOM, the PCB is designed in Easyeda and files in Gerber type. I orderd my PCB use the Gerber file from JLCpcb.
-
-![EasyEDA(标准版) - 免费、易用、强大的在线电路设计软件 - Google Chrome 2022_1_23 19_47_16](https://user-images.githubusercontent.com/43392862/150677345-1feb8e57-7f06-45fc-b877-a0eb61f51f26.png)
-
-The PCB is v0.9 means it is not complete, but it works well at least for me. 
-
-The version includes 4 digital switch, but I forget to wire out the LED pint, so I use one channel for LED only 3 digital available. 
-
-The analogy channel support 3.3v gimbal (hall and poentional meter both works), the pin use 1.25 6p plug, it is the same pin order as most frsky gimbal (M7 for example). If you use orther gimbal pay attention to the pin order. I find jumper gimbal reversed GND(red) and 3.3V(black).
-
-I powered my board with 2S battery, the arduino nano have a decent LDO （ASM1117）, and the ELRS module also powerd from 2S.
-
-### 1.2 Firmware
-
-All source codes are in SimpleTX folder.
-
-It is writen in arduino frame use VScode, but arduino IDE should also work.
-
-### 1.3 CAD-Model
-
-3 versions of transmitter shell are available.
-
-1 is a remix from https://github.com/cruwaller/elrs_handset
-
-![DSC00981](https://user-images.githubusercontent.com/43392862/206710142-ffb84e65-c567-4101-8fe2-d68fe21cae29.JPG)
-
-I removed 2 switch, and modify switch in front side from Switches to Tango2 like switch
-
-![DSC00982](https://user-images.githubusercontent.com/43392862/206710187-ea65c351-b675-4ccc-97e1-455140d3e338.JPG)
-
-Front_Shell_REV-A_M7_kkbin_modify.stl
-
-2 is my design, it is compatibal with jumper TX 12 hall gimbal, very compact.
-
-![DSC00988](https://user-images.githubusercontent.com/43392862/206710049-68ed9d0f-3812-43b5-ade6-776c0b12b786.JPG)
-
-
-SimpleTX_Top_v15.stl
-
-3 is for X9 lite gimbal, it feels too big for me.
-
-
-!!! Do not solder the buzzer, need to add triode in next version, I burned my board.
-![buzzer](https://user-images.githubusercontent.com/43392862/202906574-64efb654-1023-4be7-9c3d-3a5a70b9f1aa.jpg)
-
-
-This Transmitter is inspired by cruwallero:
-https://github.com/cruwaller/elrs_handset
-
-Some code are based on  Pawel's amazing work on SBUS generate code.
-
-https://quadmeup.com/generate-s-bus-with-arduino-in-a-simple-way/
+- Fits in your pocket. Not like the Radio Master Pocket which will get you funny looks... Actually pocketable.
+- Using PS5 hall sensor joysticks so you dont miss out on that super magnetic accuracy even at this size.
+- 0.42" OLED screen with easy to read, simple display
+- Runs on a 1s lipo battery - the same as you fly your whoops with. Have not tested but expect more than 1hr runtime with a  1s 300mah
+- Designed to use a 100mw telemetry Nano receiver as a TX module (RX as a TX). Also support ExpressLRS 2.4G external TX modules, but that would probably be bigger than the radio itself. External modules would need a separate power supply as most are designed to work on 7v+
+- Up to 500Hz packet rate. Possibly even FLRC 1000hz? Who even uses that...
+- 4 analog channels
+- 3 AUX channels selectable via joystick button presses (left joystick button toggles Arm, right joystick button toggles channel 6, long press for channel 7)
+
+Current STL is basic, and a tight fit. Make sure all wires are as short as needed, trim as necessary. I will be designing a PCB board you can order from PCBWay or whatever that will make building this a 15 minute job. But for now its manual wiring. 
+
+# Parts list:
+* ESP32 C3 with Oled https://ja.aliexpress.com/item/1005009157602185.html
+* PS5 Joysticks https://ja.aliexpress.com/item/1005006282848536.html
+* Nano receiver to be used as TX module https://ja.aliexpress.com/item/1005010228737836.html?
+* 5V boost converter: https://ja.aliexpress.com/item/1005011803028198.html
+* Also need two resistors for a voltage divider circuit (16k and 33k), silicone wires, battery pigtail, and a 3D printed case (joystick covers can be printed or bought)
+Total cost is around $15-20
+
+Based on work by kkbin505 with his SimpleTX project, but is now almost completely rewritten, 90% by hand (LLMs only used for code suggestions)
+ * This project is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY. 
