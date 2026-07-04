@@ -19,6 +19,8 @@
 
 displayState currentScreen = MAIN_PAGE;
 displayState lastScreen;
+menuMode menuState = MENU_BROWSE;
+
 // Instantiate the U8g2 object. (Rotation R0, No reset pin, SCL pin 6, SDA pin 5)
 U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 6, /* data=*/ 5);
 
@@ -236,17 +238,17 @@ void drawElrsStatsScreen(const ELRS& elrs) {
         display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 22);
 
         if (elrs.ready()) {
-            int index = elrs.findParamByLabel(LABEL_PACKET_RATE);
+            int index = elrs.txModule.params.findParamByLabel(LABEL_PACKET_RATE);
             if (index >= 0) {
-                const crsfParameter &param = elrs.getParam(index);
+                const crsfParameter &param = elrs.txModule.params.getParam(index);
                 display.print(param.choices[param.currentVal].text); 
             } else {
                 display.print("Packet rate ???"); 
             }
             display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 36);
-            index = elrs.findParamByLabel(LABEL_TX_POWER_STRING);
+            index = elrs.txModule.params.findParamByLabel(LABEL_TX_POWER_STRING);
             if (index >= 0) {
-                const crsfParameter &param = elrs.getParam(index);
+                const crsfParameter &param = elrs.txModule.params.getParam(index);
                 display.print(param.label); 
             } else {
                 display.print("TX power ???"); 
@@ -331,7 +333,6 @@ void drawScrollingMenuValue(const char* text, int textX, int textY, int displayA
 
 
 // Draw a menu item within a given window (top left coordinates and h/w set with x/y/h/w)
-// void drawMenuItem(const char* text1, const char* text2, crsfValueType menuType, int offsetX, int offsetY) {
 void drawMenuItem(const crsfParameter& menuItem, int offsetX, int offsetY) {
     display.setFont(u8g2_font_squeezed_b7_tr); 
     switch (menuItem.type) {
@@ -373,10 +374,10 @@ const unsigned long ANIM_DURATION = 500; // Transition duration in milliseconds
 static int prevMenuItemIndex = 0;   // Track where we came from
 static int currentMenuItemIndex = 0;// Track where we are going
 
-void animateMenu(const ELRS& elrs) {
+void animateMenu(const ParamCollection& menu) {
     if (activeAnimation == 0) {
         // Standard State: No active transition requested, render static layout normally
-        drawMenuItem(elrs.getCurrentParam(), 0, 0);
+        drawMenuItem(menu.getCurrentParam(), 0, 0);
     } 
     else {
         // Animation Active: Calculate step frame interpolation
@@ -385,7 +386,7 @@ void animateMenu(const ELRS& elrs) {
         if (elapsed >= ANIM_DURATION) {
             // Animation complete: clean state tracking parameters
             activeAnimation = 0;
-            drawMenuItem(elrs.getCurrentParam(), 0, 0);
+            drawMenuItem(menu.getCurrentParam(), 0, 0);
         } 
         else {
             // Linear Progress mapping percentage (0.0 -> 1.0 represented out of 1000)
@@ -415,8 +416,8 @@ void animateMenu(const ELRS& elrs) {
             }
 
             // Render both states into the active full-buffer layout sequentially
-            drawMenuItem(elrs.getParam(prevMenuItemIndex), offsetX_Prev, offsetY_Prev);
-            drawMenuItem(elrs.getParam(currentMenuItemIndex), offsetX_Curr, offsetY_Curr);
+            drawMenuItem(menu.getParam(prevMenuItemIndex), offsetX_Prev, offsetY_Prev);
+            drawMenuItem(menu.getParam(currentMenuItemIndex), offsetX_Curr, offsetY_Curr);
         }
     }    
 }
@@ -431,27 +432,33 @@ void animateMenu(const ELRS& elrs) {
 // 5 = Joystick button
 // 6 = Built in button (short press)
 // 7 = Built in button (long press)
-void navigateELRSMenu(ELRS &elrs, uint8_t direction) {
+// return value
+// -1: Exit menu (back to prev screen)
+//  0: normal operation (editing, or navigating menu)
+//  1: Save menu item
+//  2: Execute command??
+int navigateMenu(ParamCollection &menu, uint8_t direction) {
     uint8_t nextAnimation;
-    if (direction == 0) return;
-    switch (elrs.menuState) {
-        case ELRS::MENU_BROWSE:
+    int returnVal = 0;
+    if (direction == 0) return 0;
+    switch (menuState) {
+        case MENU_BROWSE:
             nextAnimation = 0;
             switch (direction) {
                 case 1:
-                    nextAnimation = elrs.prevInFolder();
+                    nextAnimation = menu.prevInFolder();
                     break;
                 case 2:
-                    nextAnimation = elrs.nextInFolder();
+                    nextAnimation = menu.nextInFolder();
                     break;
                 case 3:
-                    nextAnimation = elrs.exitFolder();
+                    nextAnimation = menu.exitFolder();
                     break;
                 case 4:
-                    nextAnimation = elrs.enterFolder();
+                    nextAnimation = menu.enterFolder();
                     break;
                 case 5:
-                    switch (elrs.getCurrentParam().type) {
+                    switch (menu.getCurrentParam().type) {
                         case CRSF_COMMAND:
                             //elrs.executeCommand(elrs.currentParam);
                             break;
@@ -466,8 +473,8 @@ void navigateELRSMenu(ELRS &elrs, uint8_t direction) {
                         case CRSF_FLOAT:
                         case CRSF_TEXT_SELECTION:
                         case CRSF_STRING:
-                            elrs.editValue = elrs.getCurrentParam().currentVal;
-                            elrs.menuState = ELRS::MENU_EDIT;  // Change to edit mode
+                            menu.editParam();
+                            menuState = MENU_EDIT;  // Change to edit mode
                             break;
                         default:
                             // Do nothing
@@ -475,9 +482,9 @@ void navigateELRSMenu(ELRS &elrs, uint8_t direction) {
                     }
                     break;
                 case 6:
-                    elrs.selectedParam = 0;
-                    elrs.menuState = ELRS::MENU_BROWSE;
-                    currentScreen = ELRS_STATS;  // Exit out of the menu
+                    menu.selectedParam = 0;
+                    returnVal = -1;  // Exit out of menu
+                    //currentScreen = ELRS_STATS;  // Exit out of the menu
                     break;
                     // 7/Long press not handled in menu
             }
@@ -488,27 +495,29 @@ void navigateELRSMenu(ELRS &elrs, uint8_t direction) {
                 
                 // Capture current menu item index (selectedParam) before updating the active item
                 prevMenuItemIndex = currentMenuItemIndex;
-                currentMenuItemIndex = elrs.selectedParam;
+                currentMenuItemIndex = menu.selectedParam;
             }            
             break;
-        case ELRS::MENU_EDIT:
+        case MENU_EDIT:
             switch (direction) {
                 case 3:
-                    elrs.editParamPrev();
+                    menu.editParamPrev();
                     break;
                 case 4:
-                    elrs.editParamNext();
+                    menu.editParamNext();
                     break;
                 case 5:
-                    elrs.editParamSave();  // Save the menu (this function will also exit back to browse mode)
+                    returnVal = 1;  // Indicate that we need to save the current item
+                    menuState = MENU_BROWSE;
+                    //menu.editParamSave();  // Save the menu (this function will also exit back to browse mode)
                     break;
                 case 6:
-                    elrs.editValue = elrs.getCurrentParam().currentVal; // reset selection
-                    elrs.menuState = ELRS::MENU_BROWSE;  // Go back to browse mode
+                    menu.editParam(); // reset editValue to the param's current value
+                    menuState = MENU_BROWSE;  // Go back to browse mode
                     break;
             }
             break;
-        case ELRS::MENU_POPUP:
+        case MENU_POPUP:
             switch (direction) {
                 case 5:
                     //elrs.sendCommandConfirm(elrs.currentParam);  // Confirm/execute
@@ -519,34 +528,34 @@ void navigateELRSMenu(ELRS &elrs, uint8_t direction) {
             }
             break;
     }
+
+    return returnVal;
 }
 
 
-void drawElrsMenuScreen(const ELRS& elrs) {
-//void drawELRSMenu(const ELRS& elrs) {
+void drawMenuScreen(const ParamCollection& menu) {
     static int menuIndex;
     static const int tenToThePowerOf[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
     float floatVal;
-    const crsfParameter &param = elrs.getCurrentParam();
-    //crsfParameter &param = elrs.txModule.params[elrs.selectedParam];
+    const crsfParameter &param = menu.getCurrentParam();
 
     display.clearBuffer();
     display.setFont(u8g2_font_NokiaSmallPlain_tr);    
     
-    switch (elrs.menuState) {
-        case ELRS::MENU_POPUP:
+    switch (menuState) {
+        case MENU_POPUP:
             //drawPopupMenu(elrs);
             break;
-        case ELRS::MENU_EDIT:
+        case MENU_EDIT:
             display.setCursor(OLED_X_OFFSET + 3, OLED_Y_OFFSET + 12);
             display.print(param.label);
             
             display.drawFrame(0, 14, 72, 26);        
 
             display.setFont(u8g2_font_NokiaSmallPlain_tr); 
-            display.setCursor(OLED_X_OFFSET + 9, OLED_Y_OFFSET + 30);
+            display.setCursor(OLED_X_OFFSET + 11, OLED_Y_OFFSET + 30);
 
-            switch (elrs.getCurrentParam().type) {
+            switch (param.type) {
                 case CRSF_UINT8:
                 case CRSF_INT8:
                 case CRSF_UINT16:
@@ -555,15 +564,15 @@ void drawElrsMenuScreen(const ELRS& elrs) {
                 case CRSF_INT32:
                 case CRSF_UINT64:
                 case CRSF_INT64:
-                    display.print(elrs.editValue);
+                    display.print(menu.editValue);
                     display.print(param.units);
                     break;
                 case CRSF_FLOAT:
-                    floatVal = (float) elrs.editValue / tenToThePowerOf[param.precision];
+                    floatVal = (float) menu.editValue / tenToThePowerOf[param.precision];
                     display.print(floatVal);
                     break;
                 case CRSF_TEXT_SELECTION:
-                    display.print(param.choices[elrs.editValue].text);
+                    display.print(param.choices[menu.editValue].text);
                     display.print(param.units);
                 case CRSF_STRING:
                     // No idea how to edit a string parameter - none in ELRS... yet
@@ -573,7 +582,7 @@ void drawElrsMenuScreen(const ELRS& elrs) {
                     break;   
             }
 
-            if (elrs.editValue > param.minVal) {   // Left arrow
+            if (menu.editValue > param.minVal) {   // Left arrow
                 display.setDrawColor(0);
                 display.drawBox(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 21, 5, 11);
                 display.setDrawColor(1);
@@ -581,7 +590,7 @@ void drawElrsMenuScreen(const ELRS& elrs) {
                                     OLED_X_OFFSET + 8, OLED_Y_OFFSET + 30,
                                     OLED_X_OFFSET + 3, OLED_Y_OFFSET + 26);
             }
-            if (elrs.editValue < param.maxVal) {   // Right Arrow
+            if (menu.editValue < param.maxVal) {   // Right Arrow
                 display.setDrawColor(0);
                 display.drawBox(OLED_X_OFFSET + 64, OLED_Y_OFFSET + 21, 5, 11);
                 display.setDrawColor(1);
@@ -592,7 +601,7 @@ void drawElrsMenuScreen(const ELRS& elrs) {
             break;
 
 
-        default: //ELRS::MENU_BROWSE
+        default: //MENU_BROWSE
 
             // Draw navigation arrows
             if (param.id > 0) {                          // Up Arrow
@@ -603,7 +612,7 @@ void drawElrsMenuScreen(const ELRS& elrs) {
                                     OLED_X_OFFSET + 39, OLED_Y_OFFSET + 5,
                                     OLED_X_OFFSET + 35, OLED_Y_OFFSET + 0);
             }
-            if (param.id < elrs.txModule.paramCount) {   // Down Arrrow
+            if (param.id < menu.paramCount) {   // Down Arrrow
                 display.setDrawColor(0);
                 display.drawBox(OLED_X_OFFSET + 30, OLED_Y_OFFSET + 35, 11, 6);
                 display.setDrawColor(1);
@@ -629,13 +638,12 @@ void drawElrsMenuScreen(const ELRS& elrs) {
             }
 
             // Draw or animate current menu item
-            animateMenu(elrs);
+            animateMenu(menu);
             break;
     }
 
     display.sendBuffer();
 }
-
 
 
 

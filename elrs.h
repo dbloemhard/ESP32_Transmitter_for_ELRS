@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include <stdint.h>
 #include <string.h>
+#include "params.h"
 
 class CRSF;  // Forward Declaration
 
@@ -41,9 +42,9 @@ class CRSF;  // Forward Declaration
 #define CRSF_FRAME_LENGTH               24 // length of type + payload + crc
 #define CRSF_CMD_PACKET_SIZE            8
 #define CRSF_TLM_PACKET_SIZE            10
-#define CRSF_MAX_PARAMS                 32
-#define CRSF_MAX_STRING_LEN             32
-#define CRSF_MAX_PARAM_DATA_LEN         256
+// #define CRSF_MAX_PARAMS                 32
+// #define CRSF_MAX_STRING_LEN             32
+// #define CRSF_MAX_PARAM_DATA_LEN         256
 #define CRSF_SUBTYPE_OPENTX_SYNC        0x10
 #define CRSF_LOAD_QUEUE_MAX_ITEMS       64  // Can be anything, but lets just make it a bunch bigger than the expected size (21-22)
 
@@ -95,55 +96,6 @@ struct LoadStack {
     }
 };
 
-// Call this anywhere to safely add target items to the processing pipeline
-void enqueueParamRefresh(uint8_t paramIndex);
-
-// Individual Option/Choice Structure (For SELECT type parameters)
-struct crsfOption {
-    char text[CRSF_MAX_STRING_LEN];
-};
-
-typedef enum
-{
-    CRSF_UINT8 = 0,
-    CRSF_INT8 = 1,
-    CRSF_UINT16 = 2,
-    CRSF_INT16 = 3,
-    CRSF_UINT32 = 4,
-    CRSF_INT32 = 5,
-    CRSF_UINT64 = 6,
-    CRSF_INT64 = 7,
-    CRSF_FLOAT = 8,
-    CRSF_TEXT_SELECTION = 9,
-    CRSF_STRING = 10,
-    CRSF_FOLDER = 11,
-    CRSF_INFO = 12,
-    CRSF_COMMAND = 13,
-    CRSF_VTX = 15,
-    CRSF_OUT_OF_RANGE = 127,
-} crsfValueType;
-
-// Individual Parameter Node Structure
-struct crsfParameter {
-    uint8_t id;                       // Field Index (3, 4, 5, etc.)
-    uint8_t parentFolder;             // Parent Folder ID (0 for root)
-    crsfValueType type;               // 0x09 = Select, 0x0B = Folder, etc.
-    bool hidden;                      // extracted from the type parameter
-    int32_t currentVal;               // Currently active option index 
-    int32_t minVal;                   // Used for numeric parameters
-    int32_t maxVal;                   // Numeric parameters and String type max length
-    int32_t precision;                // Only for 0x08 float type
-    uint8_t step;                     // Adjustment step / Command state step
-    uint32_t timeout;                  // Command timeout
-   
-    char label[CRSF_MAX_STRING_LEN];  
-    char valueString[CRSF_MAX_PARAM_DATA_LEN];
-    uint8_t valueStringCharCount;
-    char units[CRSF_MAX_STRING_LEN];
-    crsfOption choices[CRSF_MAX_PARAMS]; // Extracted selectable strings (e.g., {"Off", "On"}) 
-    uint8_t choicesCount;                // Number of options successfully parsed
-};
-
 // ELRS Status structure
 struct crsfElrsStatus {
     uint8_t  packetsBad;
@@ -163,7 +115,8 @@ struct crsfModule {
     uint8_t protocolVersion;
     bool paramsLoaded;
 
-    crsfParameter params[CRSF_MAX_PARAMS];
+    // crsfParameter params[CRSF_MAX_PARAMS];
+    ParamCollection params;
 };
 
 
@@ -172,27 +125,16 @@ public:
     // Properties
     bool ready() const { return connectionState == ELRS_READY; }
     bool showMenu = false;
+    bool popup = false;
     crsfModule txModule;
     crsfElrsStatus elrsStatus;
 
-    enum menuMode { MENU_BROWSE, MENU_EDIT, MENU_POPUP };
-    menuMode menuState = MENU_BROWSE;
-    uint8_t selectedParam = 0;
-    int32_t editValue = 0;
 
     // Methods
     ELRS(CRSF& crsfInstance);   // initializer - pass in the CRSF instance so it can call its references.
-    void update();                 // driver function
-    int findParamByLabel(const char searchString[]) const; // Returns the first parameter that matches the search string, -1 if not found
-    uint8_t nextInFolder();
-    uint8_t prevInFolder();
-    uint8_t enterFolder();
-    uint8_t exitFolder();
-    const crsfParameter& getCurrentParam() const;
-    const crsfParameter& getParam(const uint8_t index) const;
-    void editParamPrev();
-    void editParamNext();
-    void editParamSave();
+    void update();              // driver function
+    void editParamSave();       // Save the selected parameter with the edit value
+    // void executeParamCommand();
 
 private:
     CRSF& crsf;  // Reference link to the CRSF instance
@@ -228,8 +170,6 @@ private:
 
     void loadAllParams(uint8_t totalCount);
     void loadOneParam(uint8_t paramIndex);
-    int getParamSlot(uint8_t id); 
-    //uint8_t parseChoicesString(int slot, uint8_t* buffer, uint8_t startIdx, uint8_t maxLen);
     void parseChoicesString(int paramIndex);
     void clearModule();
 };

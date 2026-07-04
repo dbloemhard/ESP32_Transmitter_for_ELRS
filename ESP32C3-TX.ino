@@ -683,11 +683,23 @@ void statusDisplay(){
             }
         } else {
             if (currentScreen == ELRS_MENU) {
-                navigateELRSMenu(elrsClass, navigate);
+                int result = navigateMenu(elrsClass.txModule.params, navigate);
+                switch (result) {
+                    case -1:
+                        currentScreen = ELRS_STATS;  // Exit out of menu
+                        break;
+                    case 1:
+                        elrsClass.editParamSave();
+                        break;
+                    default: // Nothing to do
+                        break;
+                }
             } else if (currentScreen == CHANNEL_MENU) {
                 //navigateChannelMenu(navigate);
-            } else if (navigate == 6) {
-                nextScreen();
+            } else {
+                if (navigate == 6) {
+                    nextScreen();  // Cycle screens when not in a menu
+                }
             }
         } 
         navigate = 0; // Reset navigation
@@ -714,7 +726,7 @@ void statusDisplay(){
                 drawElrsStatsScreen(elrsClass);
                 break; 
             case ELRS_MENU: 
-                drawElrsMenuScreen(elrsClass);
+                drawMenuScreen(elrsClass.txModule.params);
                 break; 
             // case CHANNEL_OUTPUTS: 
             //     drawChannelOutputsScreen(rcChannels);

@@ -125,7 +125,7 @@ void ELRS::parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
     txModule.protocolVersion   = rxBuffer[currentIdx++];
 
     // reset the currently loaded count
-    txModule.paramCount = 0;
+    txModule.params.paramCount = 0;
 #ifdef ELRSDEBUG        
     // Debug output
     Serial.println("============ [ELRS DEVICE DETECTED] ============");
@@ -154,7 +154,7 @@ void ELRS::parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length) {
         return;
     }
 
-    int slot = getParamSlot(fieldIndex);
+    int slot = txModule.params.getParamSlot(fieldIndex);
     chunksRemaining = rxBuffer[currentIdx++]; //6
     if (slot == -1 || (tempStorageIndex > 0 && chunksRemaining != expectedChunksRemain)) {
         return;
@@ -222,8 +222,21 @@ void ELRS::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
   uint8_t currentIdx = 5;
   uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
 
-  int slot = getParamSlot(fieldIndex);
+  int slot = txModule.params.getParamSlot(fieldIndex);
   if (slot != -1) {
+    // First, handle special entry 0
+    if (fieldIndex == 0) {
+        // ELRS returns this as a folder item with label HooJ and i am not sure what that means. I am repurposing this as my Config menu title
+        txModule.params[0].parentFolder = 0;
+        txModule.params[0].type = CRSF_TEXT_SELECTION;
+        strcpy(txModule.params[0].label, "ELRS Config");
+        snprintf(txModule.params[0].choices[0].text, sizeof(txModule.params[0].choices[0].text), "Pkts: %u/%u", elrsStatus.packetsGood, elrsStatus.packetsBad);
+        txModule.params[0].currentVal = 0;
+        currentChunk = 0;
+        currentSettingsIndex = -1; // Move on to the next in the stack   
+        return;     
+    }
+
     chunksRemaining = rxBuffer[currentIdx++]; //6
 
     //if (fieldIndex == currentSettingsIndex) settingAttemptsCounter = 0;
@@ -311,7 +324,7 @@ void ELRS::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
               }
               txModule.params[slot].units[unitCharCount] = '\0';      
 
-              parseChoicesString(slot);
+              txModule.params.parseChoicesString(slot);
 #ifdef ELRSDEBUG        
               Serial.print("[PARAMETER SAVED] ");
               Serial.print(txModule.params[slot].label);
@@ -461,6 +474,9 @@ void ELRS::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
     }
     elrsStatus.statusMessage[charCounter] = '\0';
 
+    // Update menu item 0, which is repurposed as our menu title
+    snprintf(txModule.params[0].choices[0].text, sizeof(txModule.params[0].choices[0].text), "Pkts: %u/%u", elrsStatus.packetsGood, elrsStatus.packetsBad);
+
 #ifdef ELRSDEBUG        
     // Debug output
     Serial.println("\n============ [ELRS LINK STATUS 0x2E] ============");
@@ -492,19 +508,20 @@ void ELRS::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
 
 void ELRS::clearModule() {
     memset(txModule.name, 0, sizeof(txModule.name));   
-    for (int i = 0; i < txModule.paramCount; i++) {
-        txModule.params[i].id = 0;
-        txModule.params[i].parentFolder = 0;
-        txModule.params[i].type = static_cast<crsfValueType>(0);
-        txModule.params[i].hidden = false;
-        txModule.params[i].currentVal = 0;
-        memset(txModule.params[i].label, 0, sizeof(txModule.params[i].label)); 
-        for (int j = 0; j < txModule.params[i].choicesCount; j++) {
-            memset(txModule.params[i].choices[j].text, 0, sizeof(txModule.params[i].choices[j].text)); 
-        }
-        txModule.params[i].choicesCount = 0;
-    }
-    txModule.paramCount = 0;
+    // for (int i = 0; i < txModule.paramCount; i++) {
+    //     txModule.params[i].id = 0;
+    //     txModule.params[i].parentFolder = 0;
+    //     txModule.params[i].type = static_cast<crsfValueType>(0);
+    //     txModule.params[i].hidden = false;
+    //     txModule.params[i].currentVal = 0;
+    //     memset(txModule.params[i].label, 0, sizeof(txModule.params[i].label)); 
+    //     for (int j = 0; j < txModule.params[i].choicesCount; j++) {
+    //         memset(txModule.params[i].choices[j].text, 0, sizeof(txModule.params[i].choices[j].text)); 
+    //     }
+    //     txModule.params[i].choicesCount = 0;
+    // }
+    txModule.params.clearParams();
+    txModule.params.paramCount = 0;
     txModule.paramsLoaded = false;
     moduleInfoReceived = false;
     // serialNumber, hwVersion, swVersion, protocolVersion will be reset when a module is next detected
@@ -545,219 +562,17 @@ void ELRS::parseChoicesString(int paramIndex) {
    
 }
 
-int ELRS::getParamSlot(uint8_t id) {
-    // 1. Search if this parameter ID is already initialized
-    for (int i = 0; i < txModule.paramCount; i++) {
-        if (txModule.params[i].id == id) return i;
-    }
-    // 2. If it's a new ID, allocate a fresh index slot if we have space left
-    if (txModule.paramCount < CRSF_MAX_PARAMS) {
-        int freshSlot = txModule.paramCount;
-        txModule.params[freshSlot].id = id;
-        // Initialize all parameter data
-        txModule.params[freshSlot].parentFolder = 0;
-        txModule.params[freshSlot].type = static_cast<crsfValueType>(0);
-        txModule.params[freshSlot].hidden = false;
-        txModule.params[freshSlot].currentVal = 0;
-        txModule.params[freshSlot].minVal = 0;
-        txModule.params[freshSlot].maxVal = 0;
-        txModule.params[freshSlot].precision = 0;
-        txModule.params[freshSlot].step = 0;
-        txModule.params[freshSlot].timeout = 0;
-        memset(txModule.params[freshSlot].label, 0, sizeof(txModule.params[freshSlot].label));
-        memset(txModule.params[freshSlot].valueString, 0, sizeof(txModule.params[freshSlot].valueString));
-        txModule.params[freshSlot].valueStringCharCount = 0;
-        memset(txModule.params[freshSlot].units, 0, sizeof(txModule.params[freshSlot].units));
-        memset(txModule.params[freshSlot].choices, 0, sizeof(txModule.params[freshSlot].choices));
-        txModule.params[freshSlot].choicesCount = 0;
-        txModule.paramCount++;
-        return freshSlot;
-    } 
-    else {
-      Serial.println("Exceeded max parameter count. Cannot allocate free slot.");
-    }
-    return -1; // Out of safe tracking memory space
-}
-
-
-// Menu driver functions
-// ========================================================
-// Updates the selectedParam and returns a number indicating which way it navigated
-// 0 = No move
-// 1 = Up
-// 2 = Down
-// 3 = Left
-// 4 = Right
-uint8_t ELRS::nextInFolder() {
-    uint8_t parentFolder = txModule.params[selectedParam].parentFolder;
-
-    for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {
-        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
-            selectedParam = i;
-            return 1; // Moved down, scroll up
-        }
-    }
-    // if we got here it means there were no other entries at this folder level
-    // Now go back to the start and find the first item in the folder
-    for (uint8_t i = 0; i < selectedParam; i++) {
-        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
-            selectedParam = i;
-            return 2;
-        }
-    }
-    // not found (unexpected), dont updated selected param and return 'no move'
-    return 0;
-}
-
-uint8_t ELRS::prevInFolder() {
-    uint8_t parentFolder = txModule.params[selectedParam].parentFolder;
-
-    for (uint8_t i = selectedParam - 1; i >= 0; i--) {
-        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
-            selectedParam = i;
-            return 2; // Moved up, scroll down
-        }
-    }
-    // if we got here it means there were no other entries at this folder level
-    // Now search backwards from the end and find the last item in the folder.
-    for (uint8_t i = txModule.paramCount - 1; i > selectedParam ; i--) {
-        if (txModule.params[i].parentFolder == parentFolder && !txModule.params[i].hidden) {
-            selectedParam = i;
-            return 1;
-        }
-    }
-    // not found (unexpected), dont updated selected param and return 'no move'
-    return 0;
-}
-
-uint8_t ELRS::enterFolder() {
-    if (txModule.params[selectedParam].type != CRSF_FOLDER) return 0;
-    for (uint8_t i = selectedParam + 1; i < txModule.paramCount; i++) {  // Assume child items will follow folder
-        if (txModule.params[i].parentFolder == selectedParam && !txModule.params[i].hidden) {
-            selectedParam = i;
-            return 3; // Scroll left
-        }
-    }
-    // not found (unexpected), dont updated selected param and return 'no move'
-    return 0;
-}
-
-uint8_t ELRS::exitFolder() {
-    if (txModule.params[selectedParam].parentFolder == 0) {
-        if (selectedParam > 0) { // pressing left brings you back to the top of the menu
-            selectedParam = 0;
-            return 1;
-        } else {
-            return 0;
-        }
-    } else {
-        selectedParam = txModule.params[selectedParam].parentFolder;
-        return 4;  // Scroll right
-    }
-}
-
-const crsfParameter& ELRS::getCurrentParam() const {
-    return getParam(selectedParam);
-}
-
-const crsfParameter& ELRS::getParam(const uint8_t index) const {
-    if (ready() && txModule.paramsLoaded && index >= 0 && index < txModule.paramCount) {
-        if (index == 0) {  // Special handling for index 0
-            static crsfParameter MenuTitle;
-            MenuTitle.id = 0;
-            MenuTitle.parentFolder = 0;
-            MenuTitle.type = CRSF_TEXT_SELECTION;
-            strcpy(MenuTitle.label, "ELRS Config");
-            snprintf(MenuTitle.choices[0].text, sizeof(MenuTitle.choices[0].text), "Pkts: %u/%u", elrsStatus.packetsGood, elrsStatus.packetsBad);
-            MenuTitle.currentVal = 0;
-            return MenuTitle;
-        } else {
-            return txModule.params[index]; // Returns a reference directly to the array item
-        }
-    } else {
-        static crsfParameter notFound;
-        notFound.id = 0;
-        notFound.parentFolder = 0;
-        notFound.type = CRSF_INFO;
-        strcpy(notFound.label, "Loading...");
-        return notFound;
-    }
-}
-
-int ELRS::findParamByLabel(const char searchString[]) const {
-    for (uint8_t i = 1; i < txModule.paramCount; i++) {
-        if (strncmp(txModule.params[i].label, searchString, strlen(searchString)) == 0 ) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-// Edit Param functions
-void ELRS::editParamPrev() { 
-    switch(txModule.params[selectedParam].type) {
-        case CRSF_UINT8:
-        case CRSF_INT8:
-        case CRSF_UINT16:
-        case CRSF_INT16:
-        case CRSF_UINT32:
-        case CRSF_INT32:
-        case CRSF_UINT64:
-        case CRSF_INT64:
-        case CRSF_TEXT_SELECTION:
-            editValue--;
-            if (editValue < txModule.params[selectedParam].minVal) editValue = txModule.params[selectedParam].minVal;
-            break;
-        case CRSF_FLOAT:
-            editValue -= txModule.params[selectedParam].step;
-            if (editValue < txModule.params[selectedParam].minVal) editValue = txModule.params[selectedParam].minVal;
-            break;
-        case CRSF_STRING:
-            // Not sure on this one... Not needed for now
-            break;
-        default:
-            // Do nothing
-            break;   
-    }
-}
-
-void ELRS::editParamNext() {
-    switch(txModule.params[selectedParam].type) {
-        case CRSF_UINT8:
-        case CRSF_INT8:
-        case CRSF_UINT16:
-        case CRSF_INT16:
-        case CRSF_UINT32:
-        case CRSF_INT32:
-        case CRSF_UINT64:
-        case CRSF_INT64:
-        case CRSF_TEXT_SELECTION:
-            editValue++;
-            if (editValue > txModule.params[selectedParam].maxVal) editValue = txModule.params[selectedParam].maxVal;
-            break;
-        case CRSF_FLOAT:
-            editValue += txModule.params[selectedParam].step;
-            if (editValue > txModule.params[selectedParam].maxVal) editValue = txModule.params[selectedParam].maxVal;
-            break;
-        case CRSF_STRING:
-            // Not sure on this one... Not needed for now
-            break;
-        default:
-            // Do nothing
-            break;   
-    }
-}
-
 void ELRS::editParamSave() {
-    sendCommand(selectedParam, editValue); // This will queue the command to update the parameter
-    txModule.params[selectedParam].currentVal = editValue; // updating the local value manually - will update via the refreshStack too
+    sendCommand(txModule.params.selectedParam, txModule.params.editValue); // This will queue the command to update the parameter
+    // sendCommand(selectedParam, editValue); // This will queue the command to update the parameter
+    txModule.params[txModule.params.selectedParam].currentVal = txModule.params.editValue; // updating the local value manually - will update via the refreshStack too
     
     // Update parentFolder (if this is a child), and other items in this folder tree level
-    loadOneParam(selectedParam); // Update this setting as well
-    int parentFolder = txModule.params[selectedParam].parentFolder;
+    loadOneParam(txModule.params.selectedParam); // Update this setting as well
+    int parentFolder = txModule.params.getCurrentParam().parentFolder;
     if (parentFolder > 0) {
-        for (uint8_t i = parentFolder+1; i < txModule.paramCount; i++) {
-            if (i != selectedParam && 
+        for (uint8_t i = parentFolder+1; i < txModule.params.paramCount; i++) {
+            if (i != txModule.params.selectedParam && 
                 txModule.params[i].parentFolder == parentFolder && 
                 !txModule.params[i].hidden &&
                 txModule.params[i].type != CRSF_FOLDER &&
@@ -770,7 +585,7 @@ void ELRS::editParamSave() {
 
     lastParameterQueryTime = millis();
     lastHandshakeTime +=100;
-    menuState = MENU_BROWSE;  // Set menu state back to browse
+    //menuState = MENU_BROWSE;  // Set menu state back to browse
 }
 
 
