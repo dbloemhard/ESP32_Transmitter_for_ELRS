@@ -19,40 +19,6 @@ void ParamCollection::clearParams() {
     paramCount = 0;
 }
 
-void ParamCollection::parseChoicesString(int paramIndex) {
-    uint8_t currentIdx = 0;
-    uint8_t activeOptionSlot = 0;
-    uint8_t charCount = 0;
-    params[paramIndex].choicesCount = 0;
-
-    // Keep parsing until we hit the end of the packet payload max length
-    while (currentIdx < CRSF_MAX_PARAM_DATA_LEN) {
-        char c = params[paramIndex].valueString[currentIdx++];
-        
-        if (c == 0x00) {
-            // Seal the final string choice segment and return.
-            params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
-            params[paramIndex].choicesCount = activeOptionSlot + 1;
-            return; 
-        }
-        else if (c == ';') {
-            // Semicolon delimiter encountered: seal the current choice string segment
-            params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
-            
-            // Advance to the next safe storage choice slot parameter bounds
-            if (activeOptionSlot < (CRSF_MAX_PARAMS - 1)) {
-                activeOptionSlot++;
-            }
-            charCount = 0;
-        } 
-        else {
-            if (charCount < (CRSF_MAX_STRING_LEN - 1)) {
-                params[paramIndex].choices[activeOptionSlot].text[charCount++] = c;
-            }
-        }
-    }
-   
-}
 
 int ParamCollection::getParamSlot(uint8_t id) {
     // 1. Search if this parameter ID is already initialized
@@ -75,7 +41,6 @@ int ParamCollection::getParamSlot(uint8_t id) {
         params[freshSlot].timeout = 0;
         memset(params[freshSlot].label, 0, sizeof(params[freshSlot].label));
         memset(params[freshSlot].valueString, 0, sizeof(params[freshSlot].valueString));
-        params[freshSlot].valueStringCharCount = 0;
         memset(params[freshSlot].units, 0, sizeof(params[freshSlot].units));
         memset(params[freshSlot].choices, 0, sizeof(params[freshSlot].choices));
         params[freshSlot].choicesCount = 0;
@@ -191,7 +156,15 @@ int ParamCollection::findParamByLabel(const char searchString[]) const {
 }
 
 // Edit Param functions
-void ParamCollection::editParamPrev() { 
+// Updates the selectedParam and returns a number indicating which way it navigated
+// 0 = No move
+// 1 = Up
+// 2 = Down
+// 3 = Left
+// 4 = Right
+uint8_t ParamCollection::editParamDec() { 
+    uint8_t direction = 0;
+    int32_t prevValue = editValue;
     switch(params[selectedParam].type) {
         case CRSF_UINT8:
         case CRSF_INT8:
@@ -201,12 +174,14 @@ void ParamCollection::editParamPrev() {
         case CRSF_INT32:
         case CRSF_UINT64:
         case CRSF_INT64:
+        case CRSF_FLOAT:
+            editValue -= params[selectedParam].step > 1 ? params[selectedParam].step : 1;
+            direction = 2;
+            if (editValue < params[selectedParam].minVal) editValue = params[selectedParam].minVal;
+            break;
         case CRSF_TEXT_SELECTION:
             editValue--;
-            if (editValue < params[selectedParam].minVal) editValue = params[selectedParam].minVal;
-            break;
-        case CRSF_FLOAT:
-            editValue -= params[selectedParam].step;
+            direction = 3;
             if (editValue < params[selectedParam].minVal) editValue = params[selectedParam].minVal;
             break;
         case CRSF_STRING:
@@ -216,9 +191,13 @@ void ParamCollection::editParamPrev() {
             // Do nothing
             break;   
     }
+    direction = (prevValue == editValue)? 0 : direction;
+    return direction;
 }
 
-void ParamCollection::editParamNext() {
+uint8_t ParamCollection::editParamInc() {
+    uint8_t direction = 0;
+    int32_t prevValue = editValue;
     switch(params[selectedParam].type) {
         case CRSF_UINT8:
         case CRSF_INT8:
@@ -228,12 +207,14 @@ void ParamCollection::editParamNext() {
         case CRSF_INT32:
         case CRSF_UINT64:
         case CRSF_INT64:
-        case CRSF_TEXT_SELECTION:
-            editValue++;
+        case CRSF_FLOAT:
+            editValue += params[selectedParam].step > 1 ? params[selectedParam].step : 1;
+            direction = 1;
             if (editValue > params[selectedParam].maxVal) editValue = params[selectedParam].maxVal;
             break;
-        case CRSF_FLOAT:
-            editValue += params[selectedParam].step;
+        case CRSF_TEXT_SELECTION:
+            editValue++;
+            direction = 4;
             if (editValue > params[selectedParam].maxVal) editValue = params[selectedParam].maxVal;
             break;
         case CRSF_STRING:
@@ -243,6 +224,8 @@ void ParamCollection::editParamNext() {
             // Do nothing
             break;   
     }
+    direction = (prevValue == editValue)? 0 : direction;
+    return direction;
 }
 
 void ParamCollection::editParam() {

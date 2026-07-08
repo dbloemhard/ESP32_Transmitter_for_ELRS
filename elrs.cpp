@@ -141,316 +141,6 @@ void ELRS::parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
 }
 
 
-void ELRS::parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length) {
-    static uint8_t tempParamStorage[CRSF_PAYLOAD_SIZE_MAX * 5]; 
-    static uint16_t tempStorageIndex = 0;
-    static uint8_t expectedChunksRemain = 0;
-    uint8_t currentIdx = 5;
-    uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
-    if (fieldIndex != activeExpectedParamIndex) {
-        memset(tempParamStorage, 0, sizeof(tempParamStorage));
-        tempStorageIndex = 0; 
-        currentChunk = 0;
-        return;
-    }
-
-    int slot = txModule.params.getParamSlot(fieldIndex);
-    chunksRemaining = rxBuffer[currentIdx++]; //6
-    if (slot == -1 || (tempStorageIndex > 0 && chunksRemaining != expectedChunksRemain)) {
-        return;
-    }
-
-    // If data is chunked, copy it to persistent buffer
-    if (chunksRemaining > 0 || currentChunk > 0) {
-        // fieldData = fieldData or {}
-        if (tempStorageIndex == 0) {
-            memset(tempParamStorage, 0, sizeof(tempParamStorage));
-            tempStorageIndex = 0; 
-
-        }
-
-    }
-/*
-  local offset
-  -- If data is chunked, copy it to persistent buffer
-  if chunksRemain > 0 or fieldChunk > 0 then
-    fieldData = fieldData or {}
-    for i=5, #data do
-      fieldData[#fieldData + 1] = data[i]
-      data[i] = nil
-    end
-    offset = 1
-  else
-    -- All data arrived in one chunk, operate directly on data
-    fieldData = data
-    offset = 5
-  end
-
-  if chunksRemain > 0 then
-    fieldChunk = fieldChunk + 1
-    expectChunksRemain = chunksRemain - 1
-  else
-    -- Field data stream is now complete, process into a field
-    loadQ[#loadQ] = nil
-
-    if #fieldData > (offset + 2) then
-      field.id = fieldId
-      field.parent = (fieldData[offset] ~= 0) and fieldData[offset] or nil
-      field.type = bit32.band(fieldData[offset+1], 0x7f)
-      field.hidden = bit32.btest(fieldData[offset+1], 0x80) or nil
-      field.name, offset = fieldGetStrOrOpts(fieldData, offset+2, field.name)
-      if functions[field.type+1].load then
-        functions[field.type+1].load(field, fieldData, offset)
-      end
-      if field.min == 0 then field.min = nil end
-      if field.max == 0 then field.max = nil end
-    end
-
-    fieldChunk = 0
-    fieldData = nil
-
-    -- Return value is if the screen should be updated
-    -- If deviceId is TX module, then the Bad/Good drives the update; for other
-    -- devices update each new item. and always update when the queue empties
-    return deviceId ~= 0xEE or #loadQ == 0
-  end
-*/
-
-}
-
-void ELRS::parseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
-  uint8_t currentIdx = 5;
-  uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
-
-  int slot = txModule.params.getParamSlot(fieldIndex);
-  if (slot != -1) {
-    // First, handle special entry 0
-    if (fieldIndex == 0) {
-        // ELRS returns this as a folder item with label HooJ and i am not sure what that means. I am repurposing this as my Config menu title
-        txModule.params[0].parentFolder = 0;
-        txModule.params[0].type = CRSF_TEXT_SELECTION;
-        strcpy(txModule.params[0].label, "ELRS Config");
-        snprintf(txModule.params[0].choices[0].text, sizeof(txModule.params[0].choices[0].text), "Pkts: %u/%u", elrsStatus.packetsGood, elrsStatus.packetsBad);
-        txModule.params[0].currentVal = 0;
-        currentChunk = 0;
-        currentSettingsIndex = -1; // Move on to the next in the stack   
-        return;     
-    }
-
-    chunksRemaining = rxBuffer[currentIdx++]; //6
-
-    //if (fieldIndex == currentSettingsIndex) settingAttemptsCounter = 0;
-
-    if (currentChunk == 0) {
-      // Parent folder and type only included on initial chunk packet
-      txModule.params[slot].parentFolder = rxBuffer[currentIdx++]; //7
-      txModule.params[slot].type = static_cast<crsfValueType>(rxBuffer[currentIdx] & 0x7F);  //8
-      txModule.params[slot].hidden = (rxBuffer[currentIdx++] & 0x80);  //8
-
-      // Parse out the Parameter Label String starting at Index 9
-      uint8_t labelCharCount = 0;
-      currentIdx = 9;  // (moot, since it will be set to that from the last currentIdx++ command - but just to be sure)
-      while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && labelCharCount < (CRSF_MAX_STRING_LEN - 1)) {
-        txModule.params[slot].label[labelCharCount++] = (char)rxBuffer[currentIdx++];
-      }
-      txModule.params[slot].label[labelCharCount] = '\0'; 
-      currentIdx++; 
-
-      // reset the valueString if it is not blank (this would happen if the item is being reloaded)
-      if (txModule.params[slot].valueStringCharCount > 0) {
-        memset(txModule.params[slot].valueString, 0, sizeof(txModule.params[slot].valueString));
-        txModule.params[slot].valueStringCharCount = 0;
-      }
-    } 
-             
-    uint8_t unitCharCount = 0;
-    switch(txModule.params[slot].type) {
-        case CRSF_UINT8:
-            // VTX Administrator contains a parameter of type UINT8. Other numeric types may appear in the future but just handling this one for now.
-            // Packet data: EA 15 2B EA EE B 0 9 0 43 68 61 6E 6E 65 6C 0 1 1 8 0 0 6F 
-            txModule.params[slot].currentVal = (int32_t)rxBuffer[currentIdx++];  // 1
-            txModule.params[slot].minVal = (int32_t)rxBuffer[currentIdx++];      // 1
-            txModule.params[slot].maxVal = (int32_t)rxBuffer[currentIdx++];      // 8
-            currentIdx++;  // Not sure what this is for on uint8 type but there is an extra 0x0 in thedata 
-            unitCharCount = 0;
-            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2) && unitCharCount < (CRSF_MAX_STRING_LEN - 1)) {
-                txModule.params[slot].units[unitCharCount++] = (char)rxBuffer[currentIdx++];
-            }
-            txModule.params[slot].units[unitCharCount] = '\0';  
- #ifdef ELRSDEBUG        
-            Serial.print("[PARAMETER SAVED] ");
-            Serial.print(txModule.params[slot].label);
-            Serial.print(" ("); Serial.print(txModule.params[slot].minVal); 
-            Serial.print("-"); Serial.print(txModule.params[slot].maxVal); Serial.print("): ");
-            Serial.print(txModule.params[slot].currentVal); Serial.println(txModule.params[slot].units);
-#endif
-            currentChunk = 0;
-            // currentSettingsIndex++;
-            currentSettingsIndex = -1; // Move on to the next in the stack
-            break;
-        case CRSF_TEXT_SELECTION:
-            // Dropdown/options selection - the main type used in ELRS
-            // New parameters (currentChunk==0) start the choices after the label string.
-            // Continuation chunks enter straight into choices strings at Index 7
-            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && txModule.params[slot].valueStringCharCount < (CRSF_MAX_PARAM_DATA_LEN - 1)) {
-              txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount++] = (char)rxBuffer[currentIdx++];
-            }
-            txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount] = '\0';
-
-            // --- FINAL CHUNK RECEPTION CLOSURE ---
-            if (chunksRemaining == 0) {
-              // The selected option is after the choices string null terminator
-              currentIdx++;
-              if (currentIdx < (length + 2)) {
-                txModule.params[slot].currentVal = rxBuffer[currentIdx];
-              }
-              // Next byte is min selection
-              currentIdx++;
-              if (currentIdx < (length + 2)) {
-                txModule.params[slot].minVal = rxBuffer[currentIdx];
-              }     
-              // Next byte is max selection (also number of choices)
-              currentIdx++;
-              if (currentIdx < (length + 2)) {
-                txModule.params[slot].maxVal = rxBuffer[currentIdx];
-              }    
-              // Next byte is 0 in all cases i checked (maybe reserved for step?)
-              currentIdx++;
-              // Parse out the units String
-              currentIdx++;
-              unitCharCount = 0;
-              while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2) && unitCharCount < (CRSF_MAX_STRING_LEN - 1)) {
-                txModule.params[slot].units[unitCharCount++] = (char)rxBuffer[currentIdx++];
-              }
-              txModule.params[slot].units[unitCharCount] = '\0';      
-
-              txModule.params.parseChoicesString(slot);
-#ifdef ELRSDEBUG        
-              Serial.print("[PARAMETER SAVED] ");
-              Serial.print(txModule.params[slot].label);
-              Serial.print(" | Choices("); Serial.print(txModule.params[slot].minVal); Serial.print("-"); Serial.print(txModule.params[slot].maxVal); Serial.print("): ");
-              if (txModule.params[slot].choicesCount > 0) {
-                for (int i = 0; i < txModule.params[slot].choicesCount; i++) {
-                    Serial.print(txModule.params[slot].choices[i].text); 
-                    if (i < txModule.params[slot].choicesCount - 1) {
-                        Serial.print(", ");
-                    }
-                } 
-              }
-              Serial.print(" | Active Selection: "); Serial.print(txModule.params[slot].choices[txModule.params[slot].currentVal].text);
-              Serial.println(txModule.params[slot].units);
-#endif
-              // Move on to process the next sequential hardware parameter tree setting
-              currentChunk = 0;
-              // currentSettingsIndex++;
-              currentSettingsIndex = -1; // Move on to the next in the stack
-            }
-            else {
-              // Data payload remains chunked, increment block indicators to fetch remaining parts
-              currentChunk++;
-#ifdef ELRSDEBUG        
-              Serial.print("Chunk stored");
-              //Serial.print("Chunk stored. Current string: "); Serial.println(txModule.params[slot].valueString);
-#endif
-            }
-            break;
-        case CRSF_FOLDER:
-            // Menu folder containing sub-items
-            // Theoretically this could be chunked too, but not done in ELRS (Yet)
-            // if (chunksRemaining == 0) {
-#ifdef ELRSDEBUG        
-            Serial.print("[PARAMETER SAVED] ");
-            Serial.print(txModule.params[slot].label);
-            Serial.print(" | Menu (ID: "); Serial.print(txModule.params[slot].id); Serial.println(")");
-#endif
-            // Move on to process the next sequential hardware parameter tree setting
-            currentChunk = 0;
-            // currentSettingsIndex++;
-            currentSettingsIndex = -1; // Move on to the next in the stack
-            break;
-        case CRSF_INFO:
-            // Display non-editable static string
-            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && txModule.params[slot].valueStringCharCount < (CRSF_MAX_PARAM_DATA_LEN - 1)) {
-              txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount++] = (char)rxBuffer[currentIdx++];
-            }
-            txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount] = '\0';
-#ifdef ELRSDEBUG        
-            Serial.print("[PARAMETER SAVED] ");
-            Serial.print(txModule.params[slot].label);
-            Serial.print(" | Info String: "); Serial.println(txModule.params[slot].valueString);
-#endif
-            currentChunk = 0;
-            // currentSettingsIndex++;
-            currentSettingsIndex = -1; // Move on to the next in the stack
-            break;
-        case CRSF_COMMAND:
-            // Execute command / status such as initiate bind or BLE joystick
-            // Sample Packet: EA 17 2B EA EE F 0 E D 45 6E 61 62 6C 65 20 57 69 46 69 0 0 C8 0 5D 
-            // Sync byte, Len, type (0x2b settings info), dest (0xEA handset), source (0xEE module), id (0x0f=15), chunks remaining (0), parent (0x0e=14), type (0x0d=command)
-            // label (Enable WiFi), string terminator 0x0, step/state (0), timeout (0xc8=200=2s), null terminated status string
-            // Label has been saved and currentIdx is sitting at step/state
-            txModule.params[slot].step = rxBuffer[currentIdx++];         
-            txModule.params[slot].timeout = rxBuffer[currentIdx++] * 10;
-            // info/status stored in the valueString property
-            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && txModule.params[slot].valueStringCharCount < (CRSF_MAX_PARAM_DATA_LEN - 1)) {
-              txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount++] = (char)rxBuffer[currentIdx++];
-            }
-            txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount] = '\0';
-            // txModule.params[slot].valueStringCharCount--; // Decrement the valueString char counter because the loop above insists on picking up the crc byte in chunked params
-
-#ifdef ELRSDEBUG        
-            Serial.print("[PARAMETER SAVED] ");
-            Serial.print(txModule.params[slot].label);
-            Serial.print(" | Command (Current state "); 
-            switch(txModule.params[slot].step) {
-              case 0: // IDLE
-                Serial.print("IDLE"); 
-                break;
-              case 1: // CLICK - user has clicked the command to execute
-                Serial.print("CLICK"); 
-                break;
-              case 2: // EXECUTING - command is executing
-                Serial.print("EXECUTING"); 
-                break;
-              case 3: // ASKCONFIRM - command pending user OK
-                Serial.print("ASKCONFIRM"); 
-                break;
-              case 4: // CONFIRMED - user has clicked confirm
-                Serial.print("CONFIRMED"); 
-                break;
-              case 5: // CANCEL - user has requested cancel
-                Serial.print("CANCEL"); 
-                break;
-              case 6: // QUERY - host is requested updated status
-                Serial.print("QUERY"); 
-                break;
-            }
-            Serial.print(" | Timeout ");
-            Serial.print(txModule.params[slot].timeout); 
-            Serial.print(" | Info/Status : "); Serial.print(txModule.params[slot].valueString); Serial.println(")");
-#endif
-            currentChunk = 0;
-            // currentSettingsIndex++;
-            currentSettingsIndex = -1; // Move on to the next in the stack
-            break;
-        default:
-            // String, Float or Int types defined in spec but not used in ELRS
-            // Move on to process the next sequential hardware parameter tree setting
-#ifdef ELRSDEBUG        
-            Serial.print("Unhanded info packet type. Packet data: ");
-            for (int i = 0; i < length; i++){
-              Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
-            } Serial.println();
-#endif
-            currentChunk = 0;
-            // currentSettingsIndex++;
-            currentSettingsIndex = -1; // Move on to the next in the stack
-        break;
-    }
-    lastParameterQueryTime = 0;  //Move on to the next parameter immediately
-  }
-}
-
 void ELRS::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
     // rxBuffer[3] = destination (handset, 0xEF/0xEA), rxBuffer[4] = source (TX module, 0xEE).
     // Discard frames not originating from the ELRS TX module address.
@@ -502,24 +192,266 @@ void ELRS::parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
 }
 
 
+void ELRS::parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length) {
+	  // tempParamStorage = fieldData from ELRS Lua (and tempStorageIndex = fieldData#)
+    static uint8_t tempParamStorage[CRSF_PAYLOAD_SIZE_MAX * 5];  // Assume a max of 5 chunks per parameter
+    static uint16_t tempStorageIndex = 0;
+    static uint8_t expectedChunksRemaining = 0;
+    uint8_t fieldIndex = rxBuffer[5]; //5
+    if (fieldIndex != currentSettingsIndex) {
+        memset(tempParamStorage, 0, sizeof(tempParamStorage));
+        tempStorageIndex = 0; 
+        currentChunk = 0;
+        return;
+    }
 
-// Response Parser functions
+    int slot = txModule.params.getParamSlot(fieldIndex);
+    chunksRemaining = rxBuffer[6]; //6
+    if (slot == -1 || (tempStorageIndex > 0 && chunksRemaining != expectedChunksRemaining)) {
+        return;
+    }
+
+    if (currentChunk == 0) {
+        memset(tempParamStorage, 0, sizeof(tempParamStorage));
+        memcpy(tempParamStorage, rxBuffer, length); // Copy entire packet including CRC
+        tempStorageIndex = length;
+    }
+	  else {
+        if (sizeof(tempParamStorage) > tempStorageIndex + (length-7)) {
+            size_t offset = tempStorageIndex - 1; // Move one character back to overwrite the prev package CRC
+            memcpy(tempParamStorage+offset, rxBuffer+7, length-7);
+            tempStorageIndex += length-8;  // One less because we moved back to overwrite the previous CRC
+        } 
+        else { // Unexpected - buffer overrun trying to store chunk
+            // add null pointer to close off strings
+            // move on to next field.
+            expectedChunksRemaining = 0;
+            currentChunk=0;
+            currentSettingsIndex = -1;
+            return;
+        }
+	  } 
+	
+    // If there are any chunks remaining, move on to the next chunk
+    if (chunksRemaining > 0) {
+        currentChunk++;    	
+        expectedChunksRemaining = chunksRemaining - 1;
+    }	
+	  else {
+        parseParameter(tempParamStorage, tempStorageIndex);
+        
+        tempStorageIndex = 0;
+        currentChunk=0;
+        currentSettingsIndex = -1;
+	  }
+	
+    lastParameterQueryTime = 0;  //Move on to the next parameter immediately
+}
+
+
+void ELRS::parseParameter(uint8_t rxBuffer[], uint8_t length) {
+    uint8_t currentIdx = 5;
+    uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
+
+    int slot = txModule.params.getParamSlot(fieldIndex);
+    if (slot != -1) {
+    // First, handle special entry 0
+    if (fieldIndex == 0) {
+        // ELRS returns this as a folder item with label HooJ and i am not sure what that means. I am repurposing this as my Config menu title
+        txModule.params[0].parentFolder = 0;
+        txModule.params[0].type = CRSF_TEXT_SELECTION;
+        strcpy(txModule.params[0].label, "ELRS Config");
+        snprintf(txModule.params[0].choices[0].text, sizeof(txModule.params[0].choices[0].text), "Pkts: %u/%u", elrsStatus.packetsGood, elrsStatus.packetsBad);
+        txModule.params[0].currentVal = 0; 
+        return;     
+    }
+
+    currentIdx++; // Skip the chunks remaining byte (6) 
+    txModule.params[slot].parentFolder = rxBuffer[currentIdx++]; //7
+    txModule.params[slot].type = static_cast<crsfValueType>(rxBuffer[currentIdx] & 0x7F);  //8
+    txModule.params[slot].hidden = (rxBuffer[currentIdx++] & 0x80);  //8
+    
+    // Parse out the Parameter Label String starting at Index 9
+    uint8_t labelCharCount = 0;
+    currentIdx = 9;  // (moot, since it will be set to that from the last currentIdx++ command - but just to be sure)
+    while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && labelCharCount < (CRSF_MAX_STRING_LEN - 1)) {
+      txModule.params[slot].label[labelCharCount++] = (char)rxBuffer[currentIdx++];
+    }
+    txModule.params[slot].label[labelCharCount] = '\0'; 
+    currentIdx++; 
+     
+    uint8_t unitCharCount = 0;
+    uint8_t choiceCharCount = 0;
+    uint8_t valueStringCharCount = 0;
+    switch(txModule.params[slot].type) {
+        case CRSF_UINT8:
+            // VTX Administrator contains a parameter of type UINT8. Other numeric types may appear in the future but just handling this one for now.
+            // Packet data: EA 15 2B EA EE B 0 9 0 43 68 61 6E 6E 65 6C 0 1 1 8 0 0 6F 
+            txModule.params[slot].currentVal = (int32_t)rxBuffer[currentIdx++];  // 1
+            txModule.params[slot].minVal = (int32_t)rxBuffer[currentIdx++];      // 1
+            txModule.params[slot].maxVal = (int32_t)rxBuffer[currentIdx++];      // 8
+            currentIdx++;  // Not sure what this is for on uint8 type but there is an extra 0x0 in thedata 
+            unitCharCount = 0;
+            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2) && unitCharCount < (CRSF_MAX_STRING_LEN - 1)) {
+                txModule.params[slot].units[unitCharCount++] = (char)rxBuffer[currentIdx++];
+            }
+            txModule.params[slot].units[unitCharCount] = '\0';  
+ #ifdef ELRSDEBUG        
+            Serial.print("[PARAMETER SAVED] ");
+            Serial.print(txModule.params[slot].label);
+            Serial.print(" ("); Serial.print(txModule.params[slot].minVal); 
+            Serial.print("-"); Serial.print(txModule.params[slot].maxVal); Serial.print("): ");
+            Serial.print(txModule.params[slot].currentVal); Serial.println(txModule.params[slot].units);
+#endif
+            break;
+        case CRSF_TEXT_SELECTION:
+            // Dropdown/options selection - the main type used in ELRS
+            // Split the next null terminated string up on ';'
+            txModule.params[slot].choicesCount = 0;
+            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && txModule.params[slot].choicesCount < CRSF_MAX_PARAMS) {
+              char c = (char)rxBuffer[currentIdx++];
+              if (c == ';') {
+                  // Seal the current choice string
+                  txModule.params[slot].choices[txModule.params[slot].choicesCount].text[choiceCharCount] = '\0';
+                  txModule.params[slot].choicesCount++;
+                  choiceCharCount = 0;
+              }
+              else if (choiceCharCount < (CRSF_MAX_STRING_LEN - 1)) {
+                  txModule.params[slot].choices[txModule.params[slot].choicesCount].text[choiceCharCount++] = c;
+              }
+            }
+            // Seal the final slot (unless we are at 32 choices, in which case it would already have been sealed)
+            if (txModule.params[slot].choicesCount <= CRSF_MAX_PARAMS) {
+                txModule.params[slot].choices[txModule.params[slot].choicesCount].text[choiceCharCount] = '\0';
+                txModule.params[slot].choicesCount++;
+            }
+            
+        	  // The selected option is after the choices string null terminator
+        	  currentIdx++;
+            if (currentIdx < (length + 2)) {
+                txModule.params[slot].currentVal = rxBuffer[currentIdx];
+            }
+            // Next byte is min selection
+            currentIdx++;
+            if (currentIdx < (length + 2)) {
+                txModule.params[slot].minVal = rxBuffer[currentIdx];
+            }     
+            // Next byte is max selection (also number of choices)
+        	  currentIdx++;
+            if (currentIdx < (length + 2)) {
+                txModule.params[slot].maxVal = rxBuffer[currentIdx];
+            }    
+            // Next byte is 0 in all cases i checked (maybe reserved for step?)
+            currentIdx++;
+            // Parse out the units String
+            currentIdx++;
+            unitCharCount = 0;
+            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2) && unitCharCount < (CRSF_MAX_STRING_LEN - 1)) {
+                txModule.params[slot].units[unitCharCount++] = (char)rxBuffer[currentIdx++];
+            }
+            txModule.params[slot].units[unitCharCount] = '\0';      
+#ifdef ELRSDEBUG        
+            Serial.print("[PARAMETER SAVED] ");
+            Serial.print(txModule.params[slot].label);
+            Serial.print(" | Choices("); Serial.print(txModule.params[slot].minVal); Serial.print("-"); Serial.print(txModule.params[slot].maxVal); Serial.print("): ");
+            if (txModule.params[slot].choicesCount > 0) {
+                for (int i = 0; i < txModule.params[slot].choicesCount; i++) {
+                    Serial.print(txModule.params[slot].choices[i].text); 
+                    if (i < txModule.params[slot].choicesCount - 1) {
+                        Serial.print(", ");
+                    }
+                } 
+            }
+            Serial.print(" | Active Selection: "); Serial.print(txModule.params[slot].choices[txModule.params[slot].currentVal].text);
+            Serial.println(txModule.params[slot].units);
+#endif
+            break;
+        case CRSF_FOLDER:
+            // Menu folder containing sub-items
+#ifdef ELRSDEBUG        
+            Serial.print("[PARAMETER SAVED] ");
+            Serial.print(txModule.params[slot].label);
+            Serial.print(" | Menu (ID: "); Serial.print(txModule.params[slot].id); Serial.println(")");
+#endif
+            break;
+        case CRSF_INFO:
+            // Display non-editable static string
+            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && valueStringCharCount < (CRSF_MAX_PARAM_DATA_LEN - 1)) {
+              txModule.params[slot].valueString[valueStringCharCount++] = (char)rxBuffer[currentIdx++];
+            }
+            txModule.params[slot].valueString[valueStringCharCount] = '\0';
+#ifdef ELRSDEBUG        
+            Serial.print("[PARAMETER SAVED] ");
+            Serial.print(txModule.params[slot].label);
+            Serial.print(" | Info String: "); Serial.println(txModule.params[slot].valueString);
+#endif
+            break;
+        case CRSF_COMMAND:
+            // Execute command / status such as initiate bind or BLE joystick
+            // Sample Packet: EA 17 2B EA EE F 0 E D 45 6E 61 62 6C 65 20 57 69 46 69 0 0 C8 0 5D 
+            // Sync byte, Len, type (0x2b settings info), dest (0xEA handset), source (0xEE module), id (0x0f=15), chunks remaining (0), parent (0x0e=14), type (0x0d=command)
+            // label (Enable WiFi), string terminator 0x0, step/state (0), timeout (0xc8=200=2s), null terminated status string
+            // Label has been saved and currentIdx is sitting at step/state
+            txModule.params[slot].step = rxBuffer[currentIdx++];         
+            txModule.params[slot].timeout = rxBuffer[currentIdx++] * 10;
+            // info/status stored in the valueString property
+            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length-1) && valueStringCharCount < (CRSF_MAX_PARAM_DATA_LEN - 1)) {
+              txModule.params[slot].valueString[valueStringCharCount++] = (char)rxBuffer[currentIdx++];
+            }
+            txModule.params[slot].valueString[valueStringCharCount] = '\0';
+
+#ifdef ELRSDEBUG        
+            Serial.print("[PARAMETER SAVED] ");
+            Serial.print(txModule.params[slot].label);
+            Serial.print(" | Command (Current state "); 
+            switch(txModule.params[slot].step) {
+              case 0: // IDLE
+                Serial.print("IDLE"); 
+                break;
+              case 1: // CLICK - user has clicked the command to execute
+                Serial.print("CLICK"); 
+                break;
+              case 2: // EXECUTING - command is executing
+                Serial.print("EXECUTING"); 
+                break;
+              case 3: // ASKCONFIRM - command pending user OK
+                Serial.print("ASKCONFIRM"); 
+                break;
+              case 4: // CONFIRMED - user has clicked confirm
+                Serial.print("CONFIRMED"); 
+                break;
+              case 5: // CANCEL - user has requested cancel
+                Serial.print("CANCEL"); 
+                break;
+              case 6: // QUERY - host is requested updated status
+                Serial.print("QUERY"); 
+                break;
+            }
+            Serial.print(" | Timeout ");
+            Serial.print(txModule.params[slot].timeout); 
+            Serial.print(" | Info/Status : "); Serial.print(txModule.params[slot].valueString); Serial.println(")");
+#endif
+            break;
+        default:
+            // String, Float or Int types defined in spec but not used in ELRS
+            // Move on to process the next sequential hardware parameter tree setting
+#ifdef ELRSDEBUG        
+            Serial.print("Unhanded info packet type. Packet data: ");
+            for (int i = 0; i < length; i++){
+              Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
+            } Serial.println();
+#endif
+        break;
+    } // Switch
+  } // If Slot!=-1
+}
+
+
+// Other utility functions
 // ========================================================
 
 void ELRS::clearModule() {
     memset(txModule.name, 0, sizeof(txModule.name));   
-    // for (int i = 0; i < txModule.paramCount; i++) {
-    //     txModule.params[i].id = 0;
-    //     txModule.params[i].parentFolder = 0;
-    //     txModule.params[i].type = static_cast<crsfValueType>(0);
-    //     txModule.params[i].hidden = false;
-    //     txModule.params[i].currentVal = 0;
-    //     memset(txModule.params[i].label, 0, sizeof(txModule.params[i].label)); 
-    //     for (int j = 0; j < txModule.params[i].choicesCount; j++) {
-    //         memset(txModule.params[i].choices[j].text, 0, sizeof(txModule.params[i].choices[j].text)); 
-    //     }
-    //     txModule.params[i].choicesCount = 0;
-    // }
     txModule.params.clearParams();
     txModule.params.paramCount = 0;
     txModule.paramsLoaded = false;
@@ -527,40 +459,6 @@ void ELRS::clearModule() {
     // serialNumber, hwVersion, swVersion, protocolVersion will be reset when a module is next detected
 }
 
-void ELRS::parseChoicesString(int paramIndex) {
-    uint8_t currentIdx = 0;
-    uint8_t activeOptionSlot = 0;
-    uint8_t charCount = 0;
-    txModule.params[paramIndex].choicesCount = 0;
-
-    // Keep parsing until we hit the end of the packet payload max length
-    while (currentIdx < CRSF_MAX_PARAM_DATA_LEN) {
-        char c = txModule.params[paramIndex].valueString[currentIdx++];
-        
-        if (c == 0x00) {
-            // Seal the final string choice segment and return.
-            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
-            txModule.params[paramIndex].choicesCount = activeOptionSlot + 1;
-            return; 
-        }
-        else if (c == ';') {
-            // Semicolon delimiter encountered: seal the current choice string segment
-            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
-            
-            // Advance to the next safe storage choice slot parameter bounds
-            if (activeOptionSlot < (CRSF_MAX_PARAMS - 1)) {
-                activeOptionSlot++;
-            }
-            charCount = 0;
-        } 
-        else {
-            if (charCount < (CRSF_MAX_STRING_LEN - 1)) {
-                txModule.params[paramIndex].choices[activeOptionSlot].text[charCount++] = c;
-            }
-        }
-    }
-   
-}
 
 void ELRS::editParamSave() {
     sendCommand(txModule.params.selectedParam, txModule.params.editValue); // This will queue the command to update the parameter
@@ -626,7 +524,8 @@ void ELRS::update() {
             parseDeviceInfoPacket(telemetryPacket.data, telemetryPacket.length);     
             break;           
           case ELRS_SETTINGS_RESPONSE:
-            parseSettingsPacket(telemetryPacket.data, telemetryPacket.length);
+            parseParameterInfoPacket(telemetryPacket.data, telemetryPacket.length);
+            // parseSettingsPacket(telemetryPacket.data, telemetryPacket.length);
             break;
           case ELRS_STATUS:
             parseElrsStatusPacket(telemetryPacket.data, telemetryPacket.length);

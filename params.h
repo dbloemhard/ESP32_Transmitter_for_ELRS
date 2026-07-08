@@ -48,7 +48,6 @@ struct crsfParameter {
    
     char label[CRSF_MAX_STRING_LEN];  
     char valueString[CRSF_MAX_PARAM_DATA_LEN];
-    uint8_t valueStringCharCount;
     char units[CRSF_MAX_STRING_LEN];
     crsfOption choices[CRSF_MAX_PARAMS]; // Extracted selectable strings (e.g., {"Off", "On"}) 
     uint8_t choicesCount;                // Number of options successfully parsed
@@ -77,14 +76,13 @@ public:
     uint8_t prevInFolder();  // Navigate to the prev param in the same folder, returning the direction it navigated
     uint8_t enterFolder();   // Navigate into a folder item (if possible), returning the direction it navigated
     uint8_t exitFolder();    // Navigate back out of a folder (if possible), returning the direction it navigated
-    void editParamPrev();    // Increments the editValue of the currently selected param
-    void editParamNext();    // Decrements the editValue of the currently selected param
-    void editParam();        // Copies the current param value into editValue; for modification before saving
+    uint8_t editParamDec();  // Increments the editValue of the currently selected param (returns true if editValue changed)
+    uint8_t editParamInc();  // Decrements the editValue of the currently selected param (returns true if editValue changed)
+    void    editParam();     // Copies the current param value into editValue; for modification before saving
     const crsfParameter& getCurrentParam() const;  // Get the currently selected param
     const crsfParameter& getParam(const uint8_t index) const; // Safe method to retrieve a specific param
 
     int getParamSlot(uint8_t id);   // Allocate a new slot for an additional parameter, if possible
-    void parseChoicesString(int paramIndex);  // Parse the semicolon separatated choices string into an array of choices
     void clearParams();
 
 private:

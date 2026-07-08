@@ -34,10 +34,10 @@
 
 //----- global variables for inputs -------------------
 struct InputValues {
-    int16_t aileron;
-    int16_t elevator;
-    int16_t throttle;
-    int16_t rudder;
+    int32_t leftX;
+    int32_t leftY;
+    int32_t rightX;
+    int32_t rightY;
     int16_t AUX1;
     int16_t AUX2;
     int16_t AUX3;
@@ -45,21 +45,30 @@ struct InputValues {
 InputValues stickValues;
 
 struct ADCValues {
-    int16_t aileron;
-    int16_t elevator;
-    int16_t throttle;
-    int16_t rudder;
-    int16_t voltage;
+    int32_t leftX;
+    int32_t leftY;
+    int32_t rightX;
+    int32_t rightY;
+    int32_t voltage;
 };
 ADCValues rawValues;
 
+struct FilterState {
+    int32_t rightX;
+    int32_t rightY;
+    int32_t leftY;
+    int32_t leftX;
+};
+FilterState filteredRaw;
+
 float batteryVoltage;
+
 bool calibrationRequested=false;
 bool ARMED = false;
 
 int previous_throttle = 191;
-const uint32_t longPressDuration = 2000;
-const uint32_t shortPressDuration = 100;
+const uint32_t longPressDuration = 1500;  // Used for long press of builtin button
+const uint32_t shortPressDuration = 100;  // Used for debounce of builtin/joystick buttons
 
 // 0 = No move/button
 // 1 = Up
@@ -91,8 +100,10 @@ CRSF crsfClass;
 // Instantiate application layer, passing driver object to it
 ELRS elrsClass(crsfClass);
 
+
 // -----------------------------------------------------------------------------------------------------
-// Calibration
+// Calibration functions
+// -----------------------------------------------------------------------------------------------------
 Preferences prefs;
 #define CALIB_CENT_TMO  5000    //ms
 #define CALIB_MOVE_TMO  15000   // ms
@@ -100,18 +111,18 @@ uint32_t calibrationTimerStart;
 int      cal_reset = 0 ;
 
 struct CalibValues {
-    int aileronMin     = 0;
-    int aileronMax     = 4095;
-    int aileronCenter  = 2048;
-    int elevatorMin    = 0;
-    int elevatorMax   = 4095;
-    int elevatorCenter = 2048;
-    int throttleMin    = 0;
-    int throttleCenter = 2048;
-    int throttleMax   = 4095;
-    int rudderMin      = 0;
-    int rudderMax     = 4095;
-    int rudderCenter  = 2048;
+    int rightXMin  = 0;
+    int rightXMax  = 4095;
+    int rightXMid  = 2048;
+    int rightYMin  = 0;
+    int rightYMax  = 4095;
+    int rightYMid  = 2048;
+    int leftXMin   = 0;
+    int leftXMax   = 4095;
+    int leftXMid   = 2048;
+    int leftYMin   = 0;
+    int leftYMax   = 4095;
+    int leftYMid   = 2048;
 };
 CalibValues calValues;
 
@@ -119,22 +130,22 @@ void calibrationSave() {
     // Open the "gimbal" namespace in Read-Write mode (false)
     prefs.begin("gimbal", false);
     
-    prefs.putShort("ailMin",  calValues.aileronMin);
-    prefs.putShort("ailMid", calValues.aileronCenter);
-    prefs.putShort("ailMax",  calValues.aileronMax);
+    prefs.putShort("rightXMin",  calValues.rightXMin);
+    prefs.putShort("rightXMid", calValues.rightXMid);
+    prefs.putShort("rightXMax",  calValues.rightXMax);
     
-    prefs.putShort("eleMin",  calValues.elevatorMin);
-    prefs.putShort("eleMid", calValues.elevatorCenter);
-    prefs.putShort("eleMax",  calValues.elevatorMax);
+    prefs.putShort("rightYMin",  calValues.rightYMin);
+    prefs.putShort("rightYMid", calValues.rightYMid);
+    prefs.putShort("rightYMax",  calValues.rightYMax);
     
-    prefs.putShort("thrMin",  calValues.throttleMin);
-    prefs.putShort("thrMid",  calValues.throttleCenter);
-    prefs.putShort("thrMax",  calValues.throttleMax);
-    
-    prefs.putShort("rudMin",  calValues.rudderMin);
-    prefs.putShort("rudMid", calValues.rudderCenter);
-    prefs.putShort("rudMax",  calValues.rudderMax);
-    
+    prefs.putShort("leftXMin",  calValues.leftXMin);
+    prefs.putShort("leftXMid", calValues.leftXMid);
+    prefs.putShort("leftXMax",  calValues.leftXMax);
+
+    prefs.putShort("leftYMin",  calValues.leftYMin);
+    prefs.putShort("leftYMid",  calValues.leftYMid);
+    prefs.putShort("leftYMax",  calValues.leftYMax);
+        
     prefs.end();
 }
 
@@ -143,21 +154,21 @@ void calibrationLoad() {
     prefs.begin("gimbal", true);
     
     // Read values, providing safe defaults if no data has been saved yet
-    calValues.aileronMin    = prefs.getShort("ailMin", 0);
-    calValues.aileronCenter = prefs.getShort("ailMid", 2048);
-    calValues.aileronMax    = prefs.getShort("ailMax", 4095);
+    calValues.rightXMin = prefs.getShort("rightXMin", 0);
+    calValues.rightXMid = prefs.getShort("rightXMid", 2048);
+    calValues.rightXMax = prefs.getShort("rightXMax", 4095);
     
-    calValues.elevatorMin    = prefs.getShort("eleMin", 0);
-    calValues.elevatorCenter = prefs.getShort("eleMid", 2048);
-    calValues.elevatorMax    = prefs.getShort("eleMax", 4095);
+    calValues.rightYMin = prefs.getShort("rightYMin", 0);
+    calValues.rightYMid = prefs.getShort("rightYMid", 2048);
+    calValues.rightYMax = prefs.getShort("rightYMax", 4095);
     
-    calValues.throttleMin    = prefs.getShort("thrMin", 0);
-    calValues.throttleCenter = prefs.getShort("thrMid", 2048);
-    calValues.throttleMax    = prefs.getShort("thrMax", 4095);
+    calValues.leftXMin  = prefs.getShort("leftXMin", 0);
+    calValues.leftXMid  = prefs.getShort("leftXMid", 2048);
+    calValues.leftXMax  = prefs.getShort("leftXMax", 4095);
     
-    calValues.rudderMin    = prefs.getShort("rudMin", 0);
-    calValues.rudderCenter = prefs.getShort("rudMid", 2048);
-    calValues.rudderMax    = prefs.getShort("rudMax", 4095);
+    calValues.leftYMin  = prefs.getShort("leftYMin", 0);
+    calValues.leftYMid  = prefs.getShort("leftYMid", 2048);
+    calValues.leftYMax  = prefs.getShort("leftYMax", 4095);
     
     prefs.end();
 
@@ -197,19 +208,18 @@ bool calibrationRun() {
     drawCalibrationScreen(1,0);  // OLED display update
     calibrationChirp(2);    // start calibration
     calibrationTimerStart = millis();
-    const int centerValue = (1023 - ANALOG_CUTOFF - ANALOG_CUTOFF) / 2;
-    calValues.aileronMin     = 65535;
-    calValues.aileronMax     = 0;
-    calValues.aileronCenter  = 0;
-    calValues.elevatorMin    = 65535;
-    calValues.elevatorMax    = 0;
-    calValues.elevatorCenter = 0;
-    calValues.throttleMin    = 65535;
-    calValues.throttleMax    = 0;
-    calValues.throttleCenter = 0;
-    calValues.rudderMin      = 65535;
-    calValues.rudderMax      = 0;
-    calValues.rudderCenter   = 0;
+    calValues.rightXMin = 65535;
+    calValues.rightXMax = 0;
+    calValues.rightXMid = 0;
+    calValues.rightYMin = 65535;
+    calValues.rightYMax = 0;
+    calValues.rightYMid = 0;
+    calValues.leftXMin  = 65535;
+    calValues.leftXMax  = 0;
+    calValues.leftXMid  = 0;
+    calValues.leftYMin  = 65535;
+    calValues.leftYMax  = 0;
+    calValues.leftYMid  = 0;
     cal_reset++;
     }
 
@@ -217,31 +227,31 @@ bool calibrationRun() {
 
     if (currentMillis <= (calibrationTimerStart + CALIB_CENT_TMO)){
         // A Center
-        int val = analogRead(ANALOG_PIN_AILERON);
-        calValues.aileronCenter = val;
+        int val = analogRead(STICK_RIGHT_X);
+        calValues.rightXMid = val;
         
         // E Center
-        val = analogRead(ANALOG_PIN_ELEVATOR);
-        calValues.elevatorCenter = val;
+        val = analogRead(STICK_RIGHT_Y);
+        calValues.rightYMid = val;
 
         // T Center
-        val = analogRead(ANALOG_PIN_THROTTLE);
-        calValues.throttleCenter = val;
+        val = analogRead(STICK_LEFT_Y);
+        calValues.leftYMid = val;
     
         // R Center
-        val = analogRead(ANALOG_PIN_RUDDER);
-        calValues.rudderCenter = val;
+        val = analogRead(STICK_LEFT_X);
+        calValues.leftXMid = val;
  
         drawCalibrationScreen(2,((int)(calibrationTimerStart + CALIB_CENT_TMO - currentMillis)/1000)+1);  // OLED display update
 
         Serial.print("Center All Sticks:   Aileron Center:");
-        Serial.print(calValues.aileronCenter);
+        Serial.print(calValues.rightXMid);
         Serial.print(" Elevator Center:");
-        Serial.print(calValues.elevatorCenter);
+        Serial.print(calValues.rightYMid);
         Serial.print(" Throttle Center:");
-        Serial.print(calValues.elevatorCenter);
+        Serial.print(calValues.leftYMid);
         Serial.print(" Rudder Center:");
-        Serial.print(calValues.rudderCenter);
+        Serial.print(calValues.leftXMid);
         Serial.println();
 
         blinkLED(DIGITAL_PIN_LED, 1000);  // Slow flash while centering
@@ -250,58 +260,58 @@ bool calibrationRun() {
     // 15 seconds for moving sticks
     else if (currentMillis > (calibrationTimerStart + CALIB_CENT_TMO) && currentMillis <  (calibrationTimerStart + CALIB_MOVE_TMO)){
         // A Min-Max
-        int val = analogRead(ANALOG_PIN_AILERON);
-        if (val < calValues.aileronMin) {
-            calValues.aileronMin = val;
+        int val = analogRead(STICK_RIGHT_X);
+        if (val < calValues.rightXMin) {
+            calValues.rightXMin = val;
         } 
-        if (val > calValues.aileronMax) {
-            calValues.aileronMax = val;
+        if (val > calValues.rightXMax) {
+            calValues.rightXMax = val;
         }
         // E Min-Max
-        val = analogRead(ANALOG_PIN_ELEVATOR);
-        if (val < calValues.elevatorMin) {
-            calValues.elevatorMin = val;
+        val = analogRead(STICK_RIGHT_Y);
+        if (val < calValues.rightYMin) {
+            calValues.rightYMin = val;
         } 
-        if (val > calValues.elevatorMax) {
-            calValues.elevatorMax = val;
+        if (val > calValues.rightYMax) {
+            calValues.rightYMax = val;
         }
 
         // T Min-Max
-        val = analogRead(ANALOG_PIN_THROTTLE);
-        if (val < calValues.throttleMin) {
-            calValues.throttleMin = val;
+        val = analogRead(STICK_LEFT_Y);
+        if (val < calValues.leftYMin) {
+            calValues.leftYMin = val;
         } 
-        if (val > calValues.throttleMax) {
-            calValues.throttleMax = val;
+        if (val > calValues.leftYMax) {
+            calValues.leftYMax = val;
         }
 
         // R Min-Max
-        val = analogRead(ANALOG_PIN_RUDDER);
-        if (val < calValues.rudderMin) {
-            calValues.rudderMin = val;
+        val = analogRead(STICK_LEFT_X);
+        if (val < calValues.leftXMin) {
+            calValues.leftXMin = val;
         } 
-        if (val > calValues.rudderMax) {
-            calValues.rudderMax = val;
+        if (val > calValues.leftXMax) {
+            calValues.leftXMax = val;
         }
 
         drawCalibrationScreen(3,((int)(calibrationTimerStart + CALIB_MOVE_TMO - currentMillis)/1000)+1);  // OLED display update
 
         Serial.print("Move sticks full range: Aileron Min:");
-        Serial.print(calValues.aileronMin);
+        Serial.print(calValues.rightXMin);
         Serial.print(" Max:");
-        Serial.print(calValues.aileronMax);
+        Serial.print(calValues.rightXMax);
         Serial.print(" Elevator Min:");
-        Serial.print(calValues.elevatorMin);
+        Serial.print(calValues.rightYMin);
         Serial.print(" Max:");
-        Serial.print(calValues.elevatorMax);
+        Serial.print(calValues.rightYMax);
         Serial.print(" Rudder Min:");
-        Serial.print(calValues.rudderMin);
+        Serial.print(calValues.leftXMin);
         Serial.print(" Max:");
-        Serial.print(calValues.rudderMax);
+        Serial.print(calValues.leftXMax);
         Serial.print(" Throttle Min:");
-        Serial.print(calValues.throttleMin);
+        Serial.print(calValues.leftYMin);
         Serial.print(" Max:");
-        Serial.print(calValues.throttleMax);
+        Serial.print(calValues.leftYMax);
         Serial.println();
 
         blinkLED(DIGITAL_PIN_LED, 100);  // Fast flash while moving to limits
@@ -315,6 +325,7 @@ bool calibrationRun() {
         cal_reset = 0;
         calibrationRequested = false;
         calibrationChirp(3);    // ok
+        lastScreen = CALIBRATION;
     }
     return true;
 
@@ -323,16 +334,27 @@ bool calibrationRun() {
 // -----------------------------------------------------------------------------------------------------
 // Handle analog input
 // -----------------------------------------------------------------------------------------------------
-// Piece-wise map calculation to handle offsets when stick centers aren't perfectly uniform
+inline int32_t lowLatencyFilter(int32_t currentRaw, int32_t *previousFiltered) {
+    if (globalSettings.adcFilter && *previousFiltered > 0) {
+        // IIR Filter implementation using fast integer bit-shifting:
+        // NewFiltered = PreviousFiltered + ((CurrentRaw - PreviousFiltered) >> FILTER_SHIFT)
+        *previousFiltered = *previousFiltered + ((currentRaw - *previousFiltered) >> FILTER_SHIFT);
+    }
+    else {
+        *previousFiltered = currentRaw;
+    }
+    return *previousFiltered;
+}
+
+// Calibration maps top and bottom parts of stick deflections separately to account for uneven ADC ranges
 int16_t calibrate(int16_t raw, int16_t minVal, int16_t centerVal, int16_t maxVal) {
-    // Clamp incoming raw value to absolute recorded physical boundaries
     raw = constrain(raw, minVal, maxVal);
     
     if (raw <= centerVal) {
-        // Map lower half of stick deflection to standard RC 1000 - 1500 range
+        // Map lower half of stick deflection 
         return map(raw, minVal, centerVal, ADC_MIN, ADC_MID);
     } else {
-        // Map upper half of stick deflection to standard RC 1500 - 2000 range
+        // Map upper half of stick deflection
         return map(raw, centerVal, maxVal, ADC_MID+1, ADC_MAX);
     }
 }
@@ -340,45 +362,158 @@ int16_t calibrate(int16_t raw, int16_t minVal, int16_t centerVal, int16_t maxVal
 void getAnalogInputs() {
     // Read Voltage
     rawValues.voltage = analogRead(ANALOG_PIN_VOLTAGE);
-    batteryVoltage = (float)rawValues.voltage / VOLTAGE_SCALE; // 98.5    
+    batteryVoltage = (float)rawValues.voltage / VOLTAGE_SCALE;
 
-    // 1. Read raw 12-bit ADC integers directly from hardware (0 - 4095)
-    rawValues.aileron = analogRead(ANALOG_PIN_AILERON);
-    rawValues.elevator = analogRead(ANALOG_PIN_ELEVATOR);
-    rawValues.throttle = analogRead(ANALOG_PIN_THROTTLE);
-    rawValues.rudder = analogRead(ANALOG_PIN_RUDDER);
+    // 1. Read raw 12-bit ADC values (0 - 4095)
+    int32_t currentRightX = analogRead(STICK_RIGHT_X);
+    int32_t currentRightY = analogRead(STICK_RIGHT_Y);
+    int32_t currentLeftY  = analogRead(STICK_LEFT_Y);
+    int32_t currentLeftX  = analogRead(STICK_LEFT_X);
     
-    // 2. Map raw values into calibrated 0-1023 values
-    stickValues.aileron  = calibrate(rawValues.aileron, calValues.aileronMin, calValues.aileronCenter, calValues.aileronMax);
-    stickValues.elevator = calibrate(rawValues.elevator, calValues.elevatorMin, calValues.elevatorCenter, calValues.elevatorMax);
-    stickValues.throttle = calibrate(rawValues.throttle, calValues.throttleMin, calValues.throttleCenter, calValues.throttleMax);
-    stickValues.rudder   = calibrate(rawValues.rudder, calValues.rudderMin, calValues.rudderCenter, calValues.rudderMax);
+    // 2. Apply fast IIR filter to raw hardware values (if enabled in globalSettings)
+    rawValues.rightX = lowLatencyFilter(currentRightX, &filteredRaw.rightX);
+    rawValues.rightY = lowLatencyFilter(currentRightY, &filteredRaw.rightY);
+    rawValues.leftY  = lowLatencyFilter(currentLeftY,  &filteredRaw.leftY);
+    rawValues.leftX  = lowLatencyFilter(currentLeftX,  &filteredRaw.leftX);
+    
+    // 3. Apply calibration mappings
+    stickValues.rightX = calibrate(rawValues.rightX, calValues.rightXMin, calValues.rightXMid, calValues.rightXMax);
+    stickValues.rightY = calibrate(rawValues.rightY, calValues.rightYMin, calValues.rightYMid, calValues.rightYMax);
+    stickValues.leftY  = calibrate(rawValues.leftY,  calValues.leftYMin, calValues.leftYMid, calValues.leftYMax);
+    stickValues.leftX  = calibrate(rawValues.leftX,  calValues.leftXMin, calValues.leftXMid, calValues.leftXMax);
 
-    // 3. Handle reverse
-    if (Is_Aileron_Reverse == 1){
-        stickValues.aileron  = ADC_MAX-stickValues.aileron;
-    }
-    if (Is_Elevator_Reverse == 1){
-        stickValues.elevator = ADC_MAX-stickValues.elevator;
-    }
-    if (Is_Throttle_Reverse == 1){
-        stickValues.throttle = ADC_MAX-stickValues.throttle;
-    }
-    if (Is_Rudder_Reverse == 1){
-        stickValues.rudder   = ADC_MAX-stickValues.rudder;
+    // 4. Hard-coded reverse (Gimbal configuration)
+    #ifdef AILERON_REVERSE
+        stickValues.rightX  = ADC_MAX-stickValues.rightX;
+    #endif
+    #ifdef ELEVATOR_REVERSE
+        stickValues.rightY = ADC_MAX-stickValues.rightY;
+    #endif
+    #ifdef THROTTLE_REVERSE
+        stickValues.leftY = ADC_MAX-stickValues.leftY;
+    #endif
+    #ifdef RUDDER_REVERSE
+        stickValues.leftX   = ADC_MAX-stickValues.leftX;
+    #endif
+
+}
+
+// Expo function for Aileron, Elevator, Rudder (Zero-Centered: -1024 to +1024)
+int32_t applyCyclicExpo(int32_t stickDiff, uint8_t expoFactor) {
+    if (expoFactor == 0) return stickDiff;
+    int32_t stickCubed = (stickDiff * stickDiff * stickDiff) >> 20; 
+    return ((100 - expoFactor) * stickDiff + expoFactor * stickCubed) / 100;
+}
+
+// For Throttle (Full Range: 0 to 2047)
+int32_t applyThrottleExpo(int32_t adcVal, uint8_t expoFactor) {
+    if (expoFactor == 0) return adcVal;
+    // Shift down to 0-1023 to avoid 32-bit integer overflow during cubing
+    int32_t downscaled = adcVal >> 1; 
+    int32_t cubed = (downscaled * downscaled * downscaled) >> 20; // 0 to 1023
+    int32_t throttleCubed = cubed << 1; // Scale back up to 0-2047
+    return ((100 - expoFactor) * adcVal + expoFactor * throttleCubed) / 100;
+}
+
+uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
+    if (adcValue < ADC_MIN) adcValue = ADC_MIN;
+    if (adcValue > ADC_MAX) adcValue = ADC_MAX;
+
+    int32_t crsfOutput = CRSF_DIGITAL_CHANNEL_MAX - CRSF_DIGITAL_CHANNEL_MIN >> 1; // Default to center value
+    uint8_t expo = globalSettings.expo[chIndex];
+    uint8_t limit = globalSettings.limit[chIndex];
+
+    if (chIndex == THROTTLE && !globalSettings.throttleCentered) {
+        // Throttle-specific Expo (Curved from 0)
+        adcValue = applyThrottleExpo(adcValue, expo);
+
+        // Top-End Throttle Limit
+        adcValue = (adcValue * limit) / 100;
+
+        // User-configured reverse
+        if (globalSettings.reverse[chIndex]) {
+            adcValue = 2047 - adcValue;
+        }
+
+        // Map to CRSF Range (172 to 1812)
+        // Ratio: 1640 / 2048 = 0.80078125 -> approximated by (* 820) >> 10
+        crsfOutput = ((adcValue * 820) >> 10) + 172;
+
+    } else {
+        int32_t stickCentered = adcValue - ADC_MID;
+
+        // Apply Dynamic Deadband
+        if (globalSettings.deadband > 0) {
+            if (abs(stickCentered) <= globalSettings.deadband) {
+                stickCentered = 0;
+            } else {
+                // Interpolate the stick curve outward past the deadband edge
+                if (stickCentered > 0) {
+                    stickCentered = ((stickCentered - globalSettings.deadband) * 1024) / (1024 - globalSettings.deadband);
+                } else {
+                    stickCentered = ((stickCentered + globalSettings.deadband) * 1024) / (1024 - globalSettings.deadband);
+                }
+            }
+        }
+
+        // Expo around center stick
+        stickCentered = applyCyclicExpo(stickCentered, expo);
+
+        // Channel limiting
+        stickCentered = (stickCentered * limit) / 100;
+
+        // User-configured reverse
+        if (globalSettings.reverse[chIndex]) {
+            stickCentered = -stickCentered;
+        }
+
+        // Map to CRSF Range and center it on 992
+        int32_t crsfScaled = (stickCentered * 820) >> 10;
+        crsfOutput = crsfScaled + 992;
     }
 
-    // 3.5 Expo, curves, mixing?
-    // TBD
+    if (crsfOutput < CRSF_DIGITAL_CHANNEL_MIN) crsfOutput = CRSF_DIGITAL_CHANNEL_MIN;
+    if (crsfOutput > CRSF_DIGITAL_CHANNEL_MAX) crsfOutput = CRSF_DIGITAL_CHANNEL_MAX;
+
+    return (uint16_t)crsfOutput;
 }
 
 
+// Map stick values into traditional standard CRSF channel microsecond positions (1000us to 2000us)
 void mapChannels() {
-    // Map stick values into traditional standard CRSF channel microsecond positions (1000us to 2000us)
-    rcChannels[AILERON]   = map(stickValues.aileron,  ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX); 
-    rcChannels[ELEVATOR]  = map(stickValues.elevator, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
-    rcChannels[THROTTLE]  = map(stickValues.throttle, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
-    rcChannels[RUDDER]    = map(stickValues.rudder,   ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);  
+    int mode = globalSettings.channelMode;
+    if (mode < 1 || mode > 4) mode = 2; // Default to Mode 2
+
+    switch (mode) {
+        case 1:
+            rcChannels[AILERON]   = processStick(stickValues.rightX, 0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues.leftY,  1);
+            rcChannels[THROTTLE]  = processStick(stickValues.rightY, 2);
+            rcChannels[RUDDER]    = processStick(stickValues.leftX,  3); 
+            break;
+        case 2:
+            rcChannels[AILERON]   = processStick(stickValues.rightX, 0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues.rightY, 1);
+            rcChannels[THROTTLE]  = processStick(stickValues.leftY,  2);
+            rcChannels[RUDDER]    = processStick(stickValues.leftX,  3); 
+            break;
+        case 3:
+            rcChannels[AILERON]   = processStick(stickValues.leftX,  0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues.leftY,  1);
+            rcChannels[THROTTLE]  = processStick(stickValues.rightY, 2);
+            rcChannels[RUDDER]    = processStick(stickValues.rightX, 3); 
+            break;
+        case 4:
+            rcChannels[AILERON]   = processStick(stickValues.leftX,  0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues.rightY, 1);
+            rcChannels[THROTTLE]  = processStick(stickValues.leftY,  2);
+            rcChannels[RUDDER]    = processStick(stickValues.rightX, 3); 
+            break;
+    }
+    // rcChannels[AILERON]   = map(stickValues.rightX, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX); 
+    // rcChannels[ELEVATOR]  = map(stickValues.leftY,  ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
+    // rcChannels[THROTTLE]  = map(stickValues.rightY, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
+    // rcChannels[RUDDER]    = map(stickValues.leftX,  ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
 }
 
 
@@ -386,6 +521,7 @@ void getDigitalInputs(){
     /*
      * Handle digital input
      */
+    
     static uint32_t buttonPressedTime = 0;
     if (digitalRead(DIGITAL_PIN_BUTTON) == LOW) {
         if (buttonPressedTime == 0)
@@ -394,7 +530,7 @@ void getDigitalInputs(){
         if (buttonPressedTime> 0) {  // pressStartTime is non-zero
             unsigned long pressDuration = millis() - buttonPressedTime;
             buttonPressedTime = 0;
-            if (pressDuration >= longPressDuration) {
+            if (pressDuration >= longPressDuration) { // LongPress Duration for this is separate and hard-coded to 2s
                 navigate = 7;
                 // Set flag to start calibration
                 // calibrationRequested = true;
@@ -413,7 +549,7 @@ void getDigitalInputs(){
         if (aux1PressedTime> 0) {  // pressStartTime is non-zero
             unsigned long pressDuration = millis() - aux1PressedTime;
             aux1PressedTime = 0;
-            if (pressDuration >= AUX_LONG_PRESS) {
+            if (pressDuration >= globalSettings.auxLongPress) {
                 if (!ARMED) {
                     // Not armed, long press - initiate menu? TBD
                     // this also protects against accidental presses - just hold longer to 'cancel'
@@ -432,7 +568,7 @@ void getDigitalInputs(){
         if (aux2PressedTime> 0) {  // pressStartTime is non-zero
             unsigned long pressDuration = millis() - aux2PressedTime;
             aux2PressedTime = 0;
-            if (pressDuration >= AUX_LONG_PRESS) {
+            if (pressDuration >= globalSettings.auxLongPress) {
                 //if (!ARMED) {
                    // Not armed, long press - initiate menu? TBD
                 //}
@@ -487,15 +623,15 @@ void selectSetting() {
     // Left Stick
     // Throttle MAX - Enable Head Tracking (if defines are set)
 
-    if (stickValues.aileron < RC_MIN_COMMAND && stickValues.elevator > RC_MAX_COMMAND) { // Elevator up + aileron left
+    if (stickValues.rightX < RC_MIN_COMMAND && stickValues.rightY > RC_MAX_COMMAND) { // Elevator up + aileron left
         crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, SETTING_1_PktRate);
         crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, SETTING_1_Power);
         crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, SETTING_1_Dynamic);
-    } else if (stickValues.aileron > RC_MAX_COMMAND && stickValues.elevator > RC_MAX_COMMAND) { // Elevator up + aileron right
+    } else if (stickValues.rightX > RC_MAX_COMMAND && stickValues.rightY > RC_MAX_COMMAND) { // Elevator up + aileron right
         crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, SETTING_2_PktRate);
         crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, SETTING_2_Power);
         crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, SETTING_2_Dynamic);
-    } else if (stickValues.aileron < RC_MIN_COMMAND && stickValues.elevator < RC_MIN_COMMAND) { // Elevator down + aileron left
+    } else if (stickValues.rightX < RC_MIN_COMMAND && stickValues.rightY < RC_MIN_COMMAND) { // Elevator down + aileron left
         if (!wifiStarted) {  // cant start bind while wifi is active
             if (bindStarted) {
                 crsfClass.crsfSendCommand(ELRS_BIND_COMMAND, ELRS_END_COMMAND);
@@ -506,7 +642,7 @@ void selectSetting() {
                 bindStarted = true;
             }
         }
-    } else if (stickValues.aileron > RC_MAX_COMMAND && stickValues.elevator < RC_MIN_COMMAND) { // Elevator down + aileron right
+    } else if (stickValues.rightX > RC_MAX_COMMAND && stickValues.rightY < RC_MIN_COMMAND) { // Elevator down + aileron right
         crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
         if (!bindStarted) {  // cant start wifi while bind is active
             if (wifiStarted) {
@@ -571,6 +707,9 @@ void blinkLED(int ledPin, uint16_t blinkRate) {
 }
 
 
+// Use right joystick for menu navigation
+// Moving past the threshold (50% throw) will move once in that direction
+// Go back below the threshold for 100ms before you can initiate another move in any direction
 void stickMenuNavigation() {
     // Timers for filtering noise (debouncing)
     static uint32_t centerStartTime = 0;
@@ -584,11 +723,11 @@ void stickMenuNavigation() {
     uint32_t currentMillis = millis();
     navigate = 0; // Reset navigate variable at the start of each loop
 
-    // 1. Check if joystick is currently physically in the center zone
-    bool stickCentered = (stickValues.elevator > RC_MIN_COMMAND && stickValues.elevator < RC_MAX_COMMAND &&
-                               stickValues.aileron  > RC_MIN_COMMAND && stickValues.aileron  < RC_MAX_COMMAND);
+    // Check if joystick is currently physically in the center zone
+    bool stickCentered = (stickValues.rightY > RC_MIN_COMMAND && stickValues.rightY < RC_MAX_COMMAND &&
+                               stickValues.rightX  > RC_MIN_COMMAND && stickValues.rightX  < RC_MAX_COMMAND);
 
-    // 2. Handle Center Debouncing
+    // Handle Center Debouncing
     if (stickCentered) {
         deflectionStartTime = 0; // Reset deflection timer
         if (centerStartTime == 0) {
@@ -598,16 +737,16 @@ void stickMenuNavigation() {
             hasNavigated = false; // Reset navigation lock for the next movement
         }
     } 
-    // 3. Handle Deflection Debouncing & Navigation
+    // Handle Deflection Debouncing & Navigation
     else {
         centerStartTime = 0; // Reset center timer
         
         // Determine current physical direction of deflection
         uint8_t currentDirection = 0;
-        if (stickValues.elevator >= RC_MAX_COMMAND)      currentDirection = 1; // Up
-        else if (stickValues.elevator <= RC_MIN_COMMAND) currentDirection = 2; // Down
-        else if (stickValues.aileron <= RC_MIN_COMMAND)  currentDirection = 3; // Left
-        else if (stickValues.aileron >= RC_MAX_COMMAND)  currentDirection = 4; // Right
+        if (stickValues.rightY >= RC_MAX_COMMAND)      currentDirection = 1; // Up
+        else if (stickValues.rightY <= RC_MIN_COMMAND) currentDirection = 2; // Down
+        else if (stickValues.rightX <= RC_MIN_COMMAND)  currentDirection = 3; // Left
+        else if (stickValues.rightX >= RC_MAX_COMMAND)  currentDirection = 4; // Right
 
         // If the direction changed mid-deflection, reset the deflection timer
         if (currentDirection != pendingDirection) {
@@ -638,15 +777,17 @@ void statusDisplay(){
         blinkLED(DIGITAL_PIN_LED, 1000); // Wifi (slow flash)
     }
 
-    // check sticks
+    // check stick idle timer
     if (checkStickMove() == true){
         blinkLED(DIGITAL_PIN_LED, 100);
         playTone(5);
     }
 
     // OLED Screen update
-    // If we are in the ELRS Menu or Channel Menu (And neither joystick (5) or builtin button (6,7) have been pressed), 
-    // check if the stick movements should navigate the menu.
+    // First check if we are in the ELRS Menu or Channel Menu
+    // Next, check if navigate has already been set by the buttons (checked prior to this code running)
+    // If either joystick (5) or builtin button (6,7) have been pressed, it should take precedence over joystick movement
+    // If both conditions are met, check if the stick movements should navigate the menu.
     // This will update the navigate variable with a number 0~4
     if ((currentScreen == ELRS_MENU || currentScreen == CHANNEL_MENU) && navigate < 5 ) {
         stickMenuNavigation();
@@ -669,7 +810,7 @@ void statusDisplay(){
                     currentScreen = ELRS_MENU;
                     break;
                 case CHANNEL_OUTPUTS: 
-                    //currentScreen = CHANNEL_MENU;
+                    currentScreen = CHANNEL_MENU;
                     break;
                 case BT_JOYSTICK: 
                     //startBtJoystick();
@@ -695,7 +836,17 @@ void statusDisplay(){
                         break;
                 }
             } else if (currentScreen == CHANNEL_MENU) {
-                //navigateChannelMenu(navigate);
+                int result = navigateMenu(handsetSettingsMenu, navigate);
+                switch (result) {
+                    case -1:
+                        currentScreen = CHANNEL_OUTPUTS;  // Exit out of menu
+                        break;
+                    case 1:
+                        saveGlobalSettings();
+                        break;
+                    default: // Nothing to do
+                        break;
+                }
             } else {
                 if (navigate == 6) {
                     nextScreen();  // Cycle screens when not in a menu
@@ -711,7 +862,7 @@ void statusDisplay(){
     uint16_t screenUpdateTime = (ARMED)? 500 : 100; // 2hz while armed, 10hz while disarmed
     if (currentTime - lastScreenUpdateTime >= screenUpdateTime) { 
         lastScreenUpdateTime = currentTime;
-        int16_t currentValues[] = {stickValues.aileron,stickValues.elevator,stickValues.throttle,stickValues.rudder,stickValues.AUX1,stickValues.AUX2,stickValues.AUX3};
+        int16_t currentValues[] = {stickValues.rightX,stickValues.rightY,stickValues.leftY,stickValues.leftX,stickValues.AUX1,stickValues.AUX2,stickValues.AUX3};
         
         switch (currentScreen) {
             case MAIN_PAGE:       
@@ -728,12 +879,12 @@ void statusDisplay(){
             case ELRS_MENU: 
                 drawMenuScreen(elrsClass.txModule.params);
                 break; 
-            // case CHANNEL_OUTPUTS: 
-            //     drawChannelOutputsScreen(rcChannels);
-            //     break;
-            // case CHANNEL_MENU: 
-            //     drawChannelMenuScreen(elrsClass);
-            //     break; 
+            case CHANNEL_OUTPUTS: 
+                drawChannelOutputsScreen(rcChannels,CRSF_DIGITAL_CHANNEL_MIN,CRSF_DIGITAL_CHANNEL_MAX);
+                break;
+            case CHANNEL_MENU: 
+                drawMenuScreen(handsetSettingsMenu);
+                break; 
             // case BT_JOYSTICK: 
             //     drawBtJoystickScreen();
             //     break;
@@ -751,13 +902,13 @@ void logData(){
 
         char buf[6]; 
         // Serial.print("Raw AETR:");
-        // sprintf(buf, "%5d", rawValues.aileron);
+        // sprintf(buf, "%5d", rawValues.rightX);
         // Serial.print(buf);
-        // sprintf(buf, "%5d", rawValues.elevator);
+        // sprintf(buf, "%5d", rawValues.rightY);
         // Serial.print(buf);
-        // sprintf(buf, "%5d", rawValues.throttle);
+        // sprintf(buf, "%5d", rawValues.leftY);
         // Serial.print(buf);
-        // sprintf(buf, "%5d", rawValues.rudder);
+        // sprintf(buf, "%5d", rawValues.leftX);
         // Serial.print(buf);
 
         Serial.print("Bat:");
@@ -814,10 +965,10 @@ void setup()
     analogReadResolution(12);       // Fix resolution layout at 12-bit scale
     analogSetAttenuation(ADC_11db);  // Force 0 - 3.3V full dynamic voltage reading scale
 
-    pinMode(ANALOG_PIN_AILERON, INPUT);
-    pinMode(ANALOG_PIN_ELEVATOR, INPUT);
-    pinMode(ANALOG_PIN_THROTTLE, INPUT);
-    pinMode(ANALOG_PIN_RUDDER, INPUT);
+    pinMode(STICK_RIGHT_X, INPUT);
+    pinMode(STICK_RIGHT_Y, INPUT);
+    pinMode(STICK_LEFT_Y, INPUT);
+    pinMode(STICK_LEFT_X, INPUT);
     pinMode(ANALOG_PIN_VOLTAGE, INPUT);
 
     pinMode(DIGITAL_PIN_SWITCH_ARM, INPUT_PULLUP);
@@ -828,7 +979,8 @@ void setup()
     pinMode(DIGITAL_PIN_BUTTON, INPUT_PULLUP);
     
     calibrationLoad();
-
+    loadGlobalSettings(true);
+    
     // passive buzzer, no startup tone
     // digitalWrite(DIGITAL_PIN_BUZZER, HIGH); //BUZZER OFF
     digitalWrite(DIGITAL_PIN_LED, LOW); // LED ON

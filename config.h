@@ -1,3 +1,4 @@
+#pragma once
 /*
  * This file is part of ESP32C3-TX
  *
@@ -14,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include "params.h"
 
 //#define USE_M7
 
@@ -22,19 +24,13 @@
  Simple TX CONFIG OPTIONS (comment out unneeded options)
  =======================================================================================================
  */
-// Define analog input limits
-#define ADC_MIN 0
-#define ADC_MID 511
-#define ADC_MAX 1023
+#define AUX_LONG_PRESS 1000   // default 1s press for enabling/disabling aux 3 (can be changed in handset settings)
 
-#define ANALOG_CUTOFF 150 // cut off lower and upper end to avoid un-symmetric joystick range in trade off resolution
-
-#define AUX_LONG_PRESS 1000   // 1s press for enabling/disabling aux 3
-// Define Reverse 1=reverse
-int Is_Aileron_Reverse  =1;
-int Is_Elevator_Reverse =0;
-int Is_Throttle_Reverse =1;
-int Is_Rudder_Reverse   =0;
+// Define hard-coded gimbal reverse (uncomment to reverse that channel)
+#define AILERON_REVERSE
+//#define ELEVATOR_REVERSE
+#define THROTTLE_REVERSE
+//#define RUDDER_REVERSE
 
 // Active buzzer only plays one tone (often used on Flight controllers as a beeper)
 // Can also use a vibrator motor
@@ -43,43 +39,19 @@ int Is_Rudder_Reverse   =0;
 //----- Voltage monitoring -------------------------
 // Define battery warning voltage
 const float VOLTAGE_SCALE = 454.5;
-const float WARNING_VOLTAGE = 3.7; // 2S Lipo 3.7v per cell
-const float BEEPING_VOLTAGE = 3.5; // 2S Lipo 3.5v per cell
-const float ON_USB = 4.5;          // On USB power / no battery
+const float WARNING_VOLTAGE = 3.7; // 1S Lipo 3.7v per cell
+const float BEEPING_VOLTAGE = 3.5; // 1S Lipo 3.5v per cell
+const float ON_USB = 1.0;          // On USB power / no battery
 
 // Define Commond for start Up Setting
-// #define RC_MIN_COMMAND 600
-// #define RC_MAX_COMMAND 1400
 // ~50% stick deflection
-#define RC_MIN_COMMAND 255
-#define RC_MAX_COMMAND 767
+#define RC_MIN_COMMAND 511
+#define RC_MAX_COMMAND 1535
 
-// Define stick unmove alarm time
+// Define stick idle alarm time
 #define STICK_ALARM_TIME 300000 // 300s or 5 minutes
 
-// ELRS 3.x (ESP8266 based TX module): with thanks to r-u-t-r-A (https://github.com/r-u-t-r-A/STM32-ELRS-Handset/tree/v4.5)
-//  1 : Set Lua [Packet Rate]= 0 - 50Hz / 1 - 100Hz Full / 2- 150Hz / 3 - 250Hz / 4 - 333Hz Full / 5 - 500Hz
-//  2 : Set Lua [Telem Ratio]= 0 - Std / 1 - Off / 2 - 1:128 / 3 - 1:64 / 4 - 1:32 / 5 - 1:16 / 6 - 1:8 / 7 - 1:4 / 8 - 1:2 / 9 - Race
-//  3 : Set Lua [Switch Mode]=0 -> Hybrid;Wide
-//  4 : Set Lua [Model Match]=0 -> Off;On
-//  5 : Set Lua [TX Power]=0 Submenu
-// 6 : Set Lua [Max Power]=0 - 10mW / 1 - 25mW / 2 - 50mW /3 - 100mW/4 - 250mW  // dont force to change, but change after reboot if last power was greater
-// 7 : Set Lua [Dynamic]=0 - Off / 1 - Dyn / 2 - AUX9 / 3 - AUX10 / 4 - AUX11 / 5 - AUX12
-// 8 : Set Lua [VTX Administrator]=0 Submenu
-// 9 : Set Lua [Band]=0 -> Off;A;B;E;F;R;L
-// 10:  Set Lua [Channel]=0 -> 1;2;3;4;5;6;7;8
-// 11 : Set Lua [Pwr Lvl]=0 -> -;1;2;3;4;5;6;7;8
-// 12 : Set Lua [Pitmode]=0 -> Off;On 
-// 13 : Set Lua [Send VTx]=0 sending response for [Send VTx] chunk=0 step=2
-// 14 : Set Lua [WiFi Connectivity]=0 Submenu
-// 15 : Set Lua [Enable WiFi]=0 sending response for [Enable WiFi] chunk=0 step=0
-// 16 : Set Lua [Enable Rx WiFi]=0 sending response for [Enable Rx WiFi] chunk=0 step=2
-// //17 : Set Lua [BLE Joystick]=0 sending response for [BLE Joystick] chunk=0 step=0  // not on ESP8266??
-// //    Set Lua [BLE Joystick]=1 sending response for [BLE Joystick] chunk=0 step=3
-// //    Set Lua [BLE Joystick]=2 sending response for [BLE Joystick] chunk=0 step=3
-// 17: Set Lua [Bind]=0 -> 
-
-// 3 Default Settings
+// Default Settings
 #define SETTING_1_PktRate 5 // 500Hz (-105dB)
 #define SETTING_1_Power 5   // 500mW
 #define SETTING_1_Dynamic 1 // Dynamic power on
@@ -88,7 +60,16 @@ const float ON_USB = 4.5;          // On USB power / no battery
 #define SETTING_2_Power 3   // 100mW
 #define SETTING_2_Dynamic 0 // Dynamic power off
 
-enum chan_order
+// Define analog input limits. ESP32 supports 12-bit resolution (0 - 4095), but in reality only half of that is useable
+#define ADC_MIN 0
+#define ADC_MID 1023
+#define ADC_MAX 2047
+
+// Filter coefficient: Higher = smoother but more latency. 
+// A value of 2 (shifts by 2) means 25% new raw sample, 75% old history. 
+#define FILTER_SHIFT 2
+
+enum ChannelOrder
 {
     AILERON,
     ELEVATOR,
@@ -104,6 +85,27 @@ enum chan_order
     AUX8, // (CH12)
 };
 
+struct HandsetSettings {
+    uint8_t channelMode;
+    bool adcFilter;
+    uint16_t deadband;
+    uint16_t auxLongPress;
+    bool throttleCentered;
+
+    bool reverse[4];  // True = reversed for A, E, T, R
+    uint8_t limit[4]; // 0 to 100 (%) for A, E, T, R
+    uint8_t expo[4];  // 0 to 100 (%) for A, E, T, R
+};
+extern HandsetSettings globalSettings;
+extern ParamCollection handsetSettingsMenu;
+
+void loadGlobalSettings(bool initialize); // pass in true to rebuild from scratch, false will update existing entries
+void saveGlobalSettings();  // Saves the currently selected global settings menu item with the current edit value
+void populateSettingsMenu();
+bool addFolder(int idx, int parent, const char* label) ;
+bool addInfo(int idx, int parent, const char* label, const char* valueString);
+bool addChoiceParam(int idx, int parent, const char* label, const std::vector<const char*>& choices, int currVal, int min, int max);
+bool addNumericParam(int idx, int parent, crsfValueType type, const char* label, int currVal, int min, int max, int step, const char* units);
 
 // External Module responses;
 // [CRSF] -> Querying Menu Parameter Index: 1, chunk: 4

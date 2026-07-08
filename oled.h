@@ -30,7 +30,7 @@ const int OLED_HEIGHT = 40;
 const int OLED_X_OFFSET = 0; //28; // Standard alignment for 0.42" 72x40 on 128px space
 const int OLED_Y_OFFSET = 0; //12; // Adjusted to shift the 40px matrix vertically if needed
 
-enum displayState {MAIN_PAGE, ELRS_STATS, ELRS_MENU, CHANNEL_OUTPUTS, CHANNEL_MENU, BT_JOYSTICK, BT_TRANSMITTER};
+enum displayState {MAIN_PAGE, ELRS_STATS, ELRS_MENU, CHANNEL_OUTPUTS, CHANNEL_MENU, BT_JOYSTICK, BT_TRANSMITTER, CALIBRATION};
 extern displayState currentScreen; 
 extern displayState lastScreen;
 enum menuMode { MENU_BROWSE, MENU_EDIT, MENU_POPUP };
@@ -40,24 +40,25 @@ void initDisplay();
 void drawBootLogo();
 void clearScreen();
 void nextScreen();
+
 void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue);
 void drawElrsStatsScreen(const ELRS& elrs);
-void drawCalibrationScreen(int stage, int secondsLeft);
-
-void drawScrollingMenuValue(const char* text, int textX, int textY, int displayAreaWidth);
-void drawMenuItem(const crsfParameter& menuItem, int offsetX, int offsetY);
-void animateMenu(const ParamCollection& menu);
-int  navigateMenu(ParamCollection &menu, uint8_t direction);
-void drawMenuScreen(const ParamCollection& menu);
-
-void navigateChannelMenu(uint8_t navInput);
-
-void drawChannelOutputsScreen(int16_t channels[]);
-void drawChannelMenuScreen(); // pass variables?
+void drawChannelOutputsScreen(int16_t channels[], int16_t min, int16_t max);
 void drawBtJoystickScreen();
 void drawBtTxScreen();
 
+void drawCalibrationScreen(int stage, int secondsLeft);
+
+void drawMenuScreen(const ParamCollection& menu);
+void drawScrollingMenuValue(const char* text, int textX, int textY, int displayAreaWidth);
+void drawMenuItem(const crsfParameter& menuItem, int offsetX, int offsetY);
+void animateMenu(const ParamCollection& menu);
+void drawEditValue(const crsfParameter& menuItem, int32_t editValue, int offsetX, int offsetY);
+void animateEditValue(const ParamCollection& menu);
+int  navigateMenu(ParamCollection &menu, uint8_t direction);
+
 void drawMessage(char title[], char line1[], char line2[]);
+
 
 // NanoTX Logo
 // Dimensions: 72 x 40 pixels

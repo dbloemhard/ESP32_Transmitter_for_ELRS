@@ -115,7 +115,6 @@ struct crsfModule {
     uint8_t protocolVersion;
     bool paramsLoaded;
 
-    // crsfParameter params[CRSF_MAX_PARAMS];
     ParamCollection params;
 };
 
@@ -160,17 +159,14 @@ private:
     void pingDevices();
     void requestElrsStatus();
     void requestSetting(uint8_t settingIndex, uint8_t chunk);
-    //void parseLinkStatsPacket(uint8_t rxBuffer[]);
-    void parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length);
-    void parseSettingsPacket(uint8_t rxBuffer[], uint8_t length);   
+
+    void parseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length);  
     void parseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length);
-    
-    // wip - copy functionality from Lua
     void parseParameterInfoPacket(uint8_t rxBuffer[], uint8_t length);
+    void parseParameter(uint8_t rxBuffer[], uint8_t length);
 
     void loadAllParams(uint8_t totalCount);
     void loadOneParam(uint8_t paramIndex);
-    void parseChoicesString(int paramIndex);
     void clearModule();
 };
 
