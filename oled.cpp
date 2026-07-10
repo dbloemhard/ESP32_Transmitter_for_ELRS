@@ -605,6 +605,80 @@ void animateEditValue(const ParamCollection& menu) {
     }    
 }
 
+// Copy of the previous drawScrollingMenuValue - since the popup may be getting displayed over such a menu item we need to track this state separately
+void drawScrollingPopupText(const char* text, int textX, int textY, int displayAreaWidth) {
+    int textWidth = display.getStrWidth(text);
+
+    unsigned long currentMillis = millis();
+    static unsigned long lastResetTime = 0;
+    static char lastText[MAX_TEXT_LENGTH] = "";
+    enum ScrollState {START,SCROLLING,FINISH};
+    static ScrollState currentState = START;
+
+    // If text changes, reset state
+    if (strcmp(text, lastText) != 0) {
+        strncpy(lastText, text, sizeof(lastText) - 1);
+        lastText[sizeof(lastText) - 1] = '\0'; // Ensure null-termination
+        currentState = START;
+        lastResetTime = currentMillis;
+    }
+    
+    // Handle short text: Center statically without scrolling
+    if (textWidth <= displayAreaWidth) {
+        int centerX = textX + (displayAreaWidth - textWidth) / 2;
+        display.drawStr(centerX, textY, text);
+        return;
+    }
+
+    // Handle standard loop cycling
+    if (currentMillis - lastResetTime >= TOTAL_CYCLE) {
+        lastResetTime = currentMillis;
+    }
+    
+    unsigned long progress = currentMillis - lastResetTime;
+    int maxScrollDistance = textWidth - displayAreaWidth;
+    int currentXOffset = 0;
+
+    // State Machine
+    if (progress < STATE_START_PAD) {
+        currentXOffset = 0;
+    } 
+    else if (progress < (STATE_START_PAD + STATE_SCROLL)) {
+        unsigned long scrollProgress = progress - STATE_START_PAD;
+        currentXOffset = (maxScrollDistance * scrollProgress) / STATE_SCROLL;
+    } 
+    else {
+        currentXOffset = maxScrollDistance;
+    }
+
+    // Assume that setClipWindow has already been set appropriately
+    display.drawStr(textX - currentXOffset, textY, text);
+}
+
+void drawPopup(const ParamCollection& menu) {
+    if (menu.popupActive()) {
+        // Clear a middle window block for readable message presentation
+        display.setDrawColor(0);
+        display.drawBox(3+OLED_X_OFFSET, 3+OLED_Y_OFFSET, OLED_WIDTH-6, OLED_HEIGHT-6); 
+        display.setDrawColor(1);
+        display.drawFrame(3+OLED_X_OFFSET, 3+OLED_Y_OFFSET, OLED_WIDTH-6, OLED_HEIGHT-6);
+
+        // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+        display.setClipWindow(5+OLED_X_OFFSET, 5+OLED_Y_OFFSET, OLED_X_OFFSET+OLED_WIDTH-10, OLED_Y_OFFSET+OLED_HEIGHT-10);
+        drawScrollingPopupText(menu.getCurrentParam().valueString, OLED_X_OFFSET + 5, OLED_Y_OFFSET + 17, OLED_WIDTH-10);
+        
+        switch (menu.getCurrentParam().step) {
+            case ELRS_COMMAND_EXECUTING:
+                // Maybe an animated cursor??
+                display.drawStr(7+OLED_X_OFFSET, OLED_Y_OFFSET+OLED_HEIGHT-12, "[Running...]");
+                break;
+            case ELRS_COMMAND_ASKCONFIRM:
+                display.drawStr(10+OLED_X_OFFSET, OLED_Y_OFFSET+OLED_HEIGHT-12, "[Confirm?]");
+                break;
+        }
+    }
+}
+
 
 // uint8_t direction
 // 0 = No move/button
@@ -619,12 +693,22 @@ void animateEditValue(const ParamCollection& menu) {
 // -1: Exit menu (back to prev screen)
 //  0: normal operation (editing, or navigating menu)
 //  1: Save menu item
-//  2: Execute command??
+//  2: Execute command
 int navigateMenu(ParamCollection &menu, uint8_t direction) {
     uint8_t nextMenuAnimation;
     uint8_t nextEditAnimation;
     int returnVal = 0;
     if (direction == 0) return 0;
+    if (menu.popupActive()) {
+        switch (direction) {
+            case 5:
+                return 2;  // User confirmed a popup prompt
+                break;   
+            case 6:
+                return -1; // User pressed back to close the popup
+                break;   
+        }
+    }
 
     switch (menuState) {
         case MENU_BROWSE:
@@ -645,7 +729,7 @@ int navigateMenu(ParamCollection &menu, uint8_t direction) {
                 case 5:
                     switch (menu.getCurrentParam().type) {
                         case CRSF_COMMAND:
-                            //elrs.executeCommand(elrs.currentParam);
+                            returnVal = 2;
                             break;
                         case CRSF_UINT8:
                         case CRSF_INT8:
@@ -721,19 +805,6 @@ int navigateMenu(ParamCollection &menu, uint8_t direction) {
                 currentEditValue = menu.editValue;
             }       
             break;
-
-
-        
-        case MENU_POPUP:
-            switch (direction) {
-                case 5:
-                    //elrs.sendCommandConfirm(elrs.currentParam);  // Confirm/execute
-                    break;   
-                case 6:
-                    //elrs.sendCommandCancel(elrs.currentParam);  // Cancel current command
-                    break;   
-            }
-            break;
     }
 
     return returnVal;
@@ -750,9 +821,6 @@ void drawMenuScreen(const ParamCollection& menu) {
     display.setFont(u8g2_font_NokiaSmallPlain_tr);    
     
     switch (menuState) {
-        case MENU_POPUP:
-            //drawPopupMenu(elrs);
-            break;
         case MENU_EDIT:
             display.setCursor(OLED_X_OFFSET + 3, OLED_Y_OFFSET + 12);
             display.print(param.label);
@@ -839,6 +907,10 @@ void drawMenuScreen(const ParamCollection& menu) {
             animateMenu(menu);
             break;
     }
+    // Draw popup over the current screen (if active). Realistically 
+    // this will cover everything we just drew, but this lets us later 
+    // animate if desired
+    drawPopup(menu);
 
     display.sendBuffer();
 }

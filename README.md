@@ -13,14 +13,11 @@ https://youtube.com/shorts/-rPwNI36CTY?feature=share
 The radio works, and i have flown around my room with it. ELRS transmitter telemetry is working, and the configuration menu is usable to change ELRS settings. Command menu items (Bind, enable wifi) are not currently implemented. 3D print design could be better - The version 2 i uploaded does not print well on my printer, and the initial version needs to be glued together.
 
 Currently outstanding code tasks:
-* Finish Implementing command item support in ELRS menu (popup window)
-* Move crsfParameter into its own class so that i can reuse it for the handset configuration menu
-* Implement channel output monitor screen
-* Implement handset configuration menu - mode change (1,2), channel reverse, expo, output limit. Will use the ELRS menu structure and crsfParams for storing the options since this is working well for ELRS items.
-* Bluetooth joystick using Bluepad32 library (RX as a TX does not suport BLE Joystick so need to implement it myself)
-* Bluetooth transmitter?? Connect bluetooth joysticks to this device and forward controls to the ELRS transmitter
+* Bluetooth joystick using ESP32-BLE-Gamepad library (RX as a TX does not suport BLE Joystick so need to implement it myself)
+* Multitask the OLED updates to free up more time for the ELRS code
+* ~~Bluetooth transmitter?? Connect bluetooth joysticks to this device and forward controls to the ELRS transmitter~~ Unfortunately most game controllers use full bluetooth which is only supported on the original ESP32, not the C3
 
-Programmed in Arduino IDE since that is simple. 
+Programmed in Arduino IDE with love and a some AI suggestions (found myself rewriting everything it did). 
 1. Install the ESP32 Boards via board manager
 2. then select ESP32C3 Dev Module board
 3. USB CDC On Boot "Enabled"

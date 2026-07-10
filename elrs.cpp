@@ -21,7 +21,6 @@
 // Initialize the reference via the initializer list
 ELRS::ELRS(CRSF& crsfInstance) : crsf(crsfInstance) {}
 
-
 // Command builder functions
 // ========================================================
 
@@ -400,6 +399,10 @@ void ELRS::parseParameter(uint8_t rxBuffer[], uint8_t length) {
             }
             txModule.params[slot].valueString[valueStringCharCount] = '\0';
 
+            if (txModule.params[slot].step > ELRS_COMMAND_IDLE && ready()) {
+                // ELRS is in idle state & we received ELRS_COMMAND_EXECUTING or ELRS_COMMAND_ASKCONFIRM
+                nextPopupPollingTime = millis() + txModule.params[slot].timeout;
+            }
 #ifdef ELRSDEBUG        
             Serial.print("[PARAMETER SAVED] ");
             Serial.print(txModule.params[slot].label);
@@ -462,7 +465,6 @@ void ELRS::clearModule() {
 
 void ELRS::editParamSave() {
     sendCommand(txModule.params.selectedParam, txModule.params.editValue); // This will queue the command to update the parameter
-    // sendCommand(selectedParam, editValue); // This will queue the command to update the parameter
     txModule.params[txModule.params.selectedParam].currentVal = txModule.params.editValue; // updating the local value manually - will update via the refreshStack too
     
     // Update parentFolder (if this is a child), and other items in this folder tree level
@@ -483,9 +485,27 @@ void ELRS::editParamSave() {
 
     lastParameterQueryTime = millis();
     lastHandshakeTime +=100;
-    //menuState = MENU_BROWSE;  // Set menu state back to browse
 }
 
+// Call this function when the user clicks a COMMAND item or clicks confirm while in a popup
+void ELRS::executeCommand() {
+    if (popup()) {
+        currentSettingsIndex = txModule.params.selectedParam;
+        sendCommand(currentSettingsIndex, ELRS_COMMAND_CONFIRMED);
+    }
+    else if (ready() && txModule.params.getCurrentParam().type == CRSF_COMMAND) {
+        currentSettingsIndex = txModule.params.selectedParam;
+        sendCommand(currentSettingsIndex, ELRS_COMMAND_CLICK); 
+    }
+}
+
+// Function to allow canceling or manually dismissing the UI dialog frame
+void ELRS::cancelCommand() {
+    if (popup()) {
+        currentSettingsIndex = txModule.params.selectedParam;
+        sendCommand(currentSettingsIndex, ELRS_COMMAND_CANCEL);
+    }
+}
 
 void ELRS::loadAllParams(uint8_t totalCount) {
     loadQueue.clear();
@@ -581,10 +601,8 @@ void ELRS::update() {
             }
             if (now - lastParameterQueryTime > 500) {
                 if (currentSettingsIndex != -1) {
-                    // if (now - lastParameterQueryTime > 500) {
-                        requestSetting(currentSettingsIndex, currentChunk); // Retry last setting, or get next chunk
-                        lastParameterQueryTime = now;
-                    // }
+                    requestSetting(currentSettingsIndex, currentChunk); // Retry last setting, or get next chunk
+                    lastParameterQueryTime = now;
                 } else {
                     // Fetch the next item from the queue
                     if (!loadQueue.isEmpty()) {
@@ -603,15 +621,24 @@ void ELRS::update() {
             break;
 
         case ELRS_READY:
-            // Normal operation loop
             // if (showMenu && now - lastHandshakeTime > 1000) {
             if (now - lastHandshakeTime > 1000) {
-                lastHandshakeTime = now;
                 requestElrsStatus();
+                lastHandshakeTime = now;
 #ifdef ELRSDEBUG        
                 Serial.println("[ELRS] Sending LinkStat Request (0x2D, 0, 0)...");
 #endif
             }
+            // Poll current popup status
+            if (popup() && now > nextPopupPollingTime) {
+                // Set currentSettingsIndex here or the received param will be discarded
+                currentSettingsIndex = txModule.params.selectedParam;
+                sendCommand(currentSettingsIndex, ELRS_COMMAND_QUERY);
+                nextPopupPollingTime = now + (txModule.params.getCurrentParam().timeout > 0 ? txModule.params.getCurrentParam().timeout : 1000); // Default 1000 if param timeout is 0
+#ifdef ELRSDEBUG        
+                Serial.print("[ELRS] Polling command status (0x2D, "); Serial.print(currentSettingsIndex, HEX); Serial.print(", "); Serial.print(ELRS_COMMAND_QUERY, HEX); Serial.println(")...");
+#endif
+            }            
             break;
     }
 

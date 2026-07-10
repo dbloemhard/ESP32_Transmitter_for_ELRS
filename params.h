@@ -8,6 +8,15 @@
 #define CRSF_MAX_STRING_LEN             32
 #define CRSF_MAX_PARAM_DATA_LEN         256
 
+// ELRS (CRSF) Command steps
+#define ELRS_COMMAND_IDLE               0x00
+#define ELRS_COMMAND_CLICK              0x01
+#define ELRS_COMMAND_EXECUTING          0x02
+#define ELRS_COMMAND_ASKCONFIRM         0x03
+#define ELRS_COMMAND_CONFIRMED          0x04
+#define ELRS_COMMAND_CANCEL             0x05
+#define ELRS_COMMAND_QUERY              0x06
+
 // Individual Option/Choice Structure (For SELECT type parameters)
 struct crsfOption {
     char text[CRSF_MAX_STRING_LEN];
@@ -60,6 +69,7 @@ public:
     uint8_t paramCount = 0;
     uint8_t selectedParam = 0;
     int32_t editValue = 0;
+    bool popupActive() const { return (params[selectedParam].type == CRSF_COMMAND && params[selectedParam].step > ELRS_COMMAND_IDLE); }
 
     // Methods
     // Overload the [] operator for reading and writing data

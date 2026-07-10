@@ -101,6 +101,7 @@ extern ParamCollection handsetSettingsMenu;
 
 void loadGlobalSettings(bool initialize); // pass in true to rebuild from scratch, false will update existing entries
 void saveGlobalSettings();  // Saves the currently selected global settings menu item with the current edit value
+void executeSettingsCommand(); // Executes the currently selected command, eg reset all settings. Not currently used.
 void populateSettingsMenu();
 bool addFolder(int idx, int parent, const char* label) ;
 bool addInfo(int idx, int parent, const char* label, const char* valueString);

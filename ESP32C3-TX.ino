@@ -826,11 +826,19 @@ void statusDisplay(){
             if (currentScreen == ELRS_MENU) {
                 int result = navigateMenu(elrsClass.txModule.params, navigate);
                 switch (result) {
-                    case -1:
-                        currentScreen = ELRS_STATS;  // Exit out of menu
+                    case -1: // Back
+                        if (elrsClass.popup()) {
+                            elrsClass.cancelCommand();
+                        } 
+                        else {
+                            currentScreen = ELRS_STATS;  // Exit out of menu
+                        }
                         break;
-                    case 1:
+                    case 1: // Save
                         elrsClass.editParamSave();
+                        break;
+                    case 2:  // Execute Command
+                        elrsClass.executeCommand();
                         break;
                     default: // Nothing to do
                         break;
@@ -839,11 +847,15 @@ void statusDisplay(){
                 int result = navigateMenu(handsetSettingsMenu, navigate);
                 switch (result) {
                     case -1:
+                        // Not using popups in channel menu, so no need to check if popupActive()
                         currentScreen = CHANNEL_OUTPUTS;  // Exit out of menu
                         break;
                     case 1:
                         saveGlobalSettings();
                         break;
+                    case 2:  // Execute Command
+                        executeSettingsCommand();
+                        break;                        
                     default: // Nothing to do
                         break;
                 }

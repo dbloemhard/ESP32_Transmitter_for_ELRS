@@ -42,9 +42,7 @@ class CRSF;  // Forward Declaration
 #define CRSF_FRAME_LENGTH               24 // length of type + payload + crc
 #define CRSF_CMD_PACKET_SIZE            8
 #define CRSF_TLM_PACKET_SIZE            10
-// #define CRSF_MAX_PARAMS                 32
-// #define CRSF_MAX_STRING_LEN             32
-// #define CRSF_MAX_PARAM_DATA_LEN         256
+#define CRSF_MAX_STRING_LEN             32
 #define CRSF_SUBTYPE_OPENTX_SYNC        0x10
 #define CRSF_LOAD_QUEUE_MAX_ITEMS       64  // Can be anything, but lets just make it a bunch bigger than the expected size (21-22)
 
@@ -58,6 +56,15 @@ class CRSF;  // Forward Declaration
 #define ELRS_HEARTBEAT                  0x2D
 #define ELRS_STATUS                     0x2E
 #define ELRS_RADIO_ID                   0x3A
+
+// ELRS (CRSF) Command steps
+#define ELRS_COMMAND_IDLE               0x00
+#define ELRS_COMMAND_CLICK              0x01
+#define ELRS_COMMAND_EXECUTING          0x02
+#define ELRS_COMMAND_ASKCONFIRM         0x03
+#define ELRS_COMMAND_CONFIRMED          0x04
+#define ELRS_COMMAND_CANCEL             0x05
+#define ELRS_COMMAND_QUERY              0x06
 
 // Device addressess
 #define HANDSET_ADDRESS                 0xEA
@@ -96,6 +103,7 @@ struct LoadStack {
     }
 };
 
+
 // ELRS Status structure
 struct crsfElrsStatus {
     uint8_t  packetsBad;
@@ -123,8 +131,8 @@ class ELRS {
 public:
     // Properties
     bool ready() const { return connectionState == ELRS_READY; }
+    bool popup() const { return txModule.params.popupActive(); }
     bool showMenu = false;
-    bool popup = false;
     crsfModule txModule;
     crsfElrsStatus elrsStatus;
 
@@ -133,6 +141,8 @@ public:
     ELRS(CRSF& crsfInstance);   // initializer - pass in the CRSF instance so it can call its references.
     void update();              // driver function
     void editParamSave();       // Save the selected parameter with the edit value
+    void executeCommand();      // Execute, or Confirm the current command parameter
+    void cancelCommand();       // Cancel the current command parameter
     // void executeParamCommand();
 
 private:
@@ -144,6 +154,7 @@ private:
     bool moduleInfoReceived = false;
     uint32_t lastHandshakeTime = 0;   
     uint32_t lastParameterQueryTime = 0;
+    uint32_t nextPopupPollingTime = 0;
     bool parameterDiscoveryActive = false;
     int16_t currentSettingsIndex = -1;
     uint8_t currentChunk = 0;

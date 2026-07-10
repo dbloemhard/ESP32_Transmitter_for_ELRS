@@ -33,7 +33,7 @@ const int OLED_Y_OFFSET = 0; //12; // Adjusted to shift the 40px matrix vertical
 enum displayState {MAIN_PAGE, ELRS_STATS, ELRS_MENU, CHANNEL_OUTPUTS, CHANNEL_MENU, BT_JOYSTICK, BT_TRANSMITTER, CALIBRATION};
 extern displayState currentScreen; 
 extern displayState lastScreen;
-enum menuMode { MENU_BROWSE, MENU_EDIT, MENU_POPUP };
+enum menuMode { MENU_BROWSE, MENU_EDIT };
 extern menuMode menuState;
 
 void initDisplay();
@@ -55,6 +55,8 @@ void drawMenuItem(const crsfParameter& menuItem, int offsetX, int offsetY);
 void animateMenu(const ParamCollection& menu);
 void drawEditValue(const crsfParameter& menuItem, int32_t editValue, int offsetX, int offsetY);
 void animateEditValue(const ParamCollection& menu);
+void drawScrollingPopupText(const char* text, int textX, int textY, int displayAreaWidth);
+void drawPopup(const ParamCollection& menu);
 int  navigateMenu(ParamCollection &menu, uint8_t direction);
 
 void drawMessage(char title[], char line1[], char line2[]);

@@ -121,6 +121,15 @@ void saveGlobalSettings() {
     configPrefs.end();
 }
 
+void executeSettingsCommand() {
+    // Do something with the current command??
+    switch (handsetSettingsMenu.selectedParam) {
+        case 99:
+            // Execute command 99 reset (eg Reset all settings)
+            break;
+    }
+}
+
 bool addFolder(int idx, int parent, const char* label) {
     if (handsetSettingsMenu.getParamSlot(idx) != -1) {
         handsetSettingsMenu[idx].parentFolder = parent;
