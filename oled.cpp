@@ -16,8 +16,11 @@
  */
  
 #include "oled.h"
+
 displayState currentScreen = MAIN_PAGE;
 displayState lastScreen;
+menuMode menuState = MENU_BROWSE;
+
 // Instantiate the U8g2 object. (Rotation R0, No reset pin, SCL pin 6, SDA pin 5)
 U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 6, /* data=*/ 5);
 
@@ -25,28 +28,20 @@ U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* cl
 void initDisplay() {
     // Force I2C initialization to use the board's dedicated hardware pins (SDA=5, SCL=6)
     Wire.begin(5, 6);
-    //Wire.setClock(800000); // 800kHz ultra-fast clock rate minimizes I2C bus lockup time
     // Start U8g2
     display.begin();
-    display.setContrast(255); // Maximize visibility on the tiny 0.42" screen
-    display.setBusClock(800000); // 400kHz fast I2C mode matching your ELRS telemetry update speed
-    
-    // Choose a small, scannable font fitting the 40px height limit
-    display.setFont(u8g2_font_04b_03_tr); 
+    display.setContrast(255);
+    display.setBusClock(800000); // 400kHz fast I2C mode
 }
 
-void showBootLogo() {
+void drawBootLogo() {
     display.clearBuffer();          // Clear the display internal ram memory
     
     // Draw NanoTX logo
     // Parameters: drawXBM(x_start, y_start, width, height, bitmap_array)
     display.drawXBM(0, 0, 72, 40, nanotx_logo_72x40);
-    
-    // 2. Add your dynamic runtime status text on the bottom area
-    // Micro fonts like u8g2_font_u8glib_4_tf (4px height) fit perfectly in tight 72x40 panels
+
     display.setFont(u8g2_font_tiny5duo_tf); 
-    
-    // Print ELRS version or connection updates dynamically 
     display.setCursor(2, 36);       // X=2, Y=38 bottom-left
     display.print("ELRS");
     
@@ -63,13 +58,14 @@ void clearScreen() {
 
 void nextScreen() {
     switch (currentScreen) {
-        case MAIN_PAGE:       currentScreen = ELRS_STATS_PAGE; break;
-        case ELRS_STATS_PAGE: currentScreen = MAIN_PAGE;       break; // Wrap around
+        case MAIN_PAGE:       currentScreen = ELRS_STATS;      break;
+        case ELRS_STATS:      currentScreen = CHANNEL_OUTPUTS; break;
+        case CHANNEL_OUTPUTS: currentScreen = MAIN_PAGE;       break; // Wrap around
     }
 }
 
 
-void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
+void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
     static int lastVoltageX10 = 0;
     static int lastTelemetryState = -1;
     static int lastBars = 0;
@@ -189,16 +185,17 @@ void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16
     // Format: drawLine(X1, Y1, X2, Y2)
     // Left AUX Slider (Far Left)
     display.drawLine(4 + OLED_X_OFFSET, 18 + OLED_Y_OFFSET, 4 + OLED_X_OFFSET, 38 + OLED_Y_OFFSET);
-    uint8_t aux1Y = map(channels[4], minChannelValue, maxChannelValue, 36, 16); // AUX 1
+    // uint8_t aux1Y = map(channels[4], minChannelValue, maxChannelValue, 36, 16); // AUX 1
+    uint8_t aux1Y = (channels[4]==0) ? 36 : 16; // AUX 1
     display.drawBox(2 + OLED_X_OFFSET, aux1Y + OLED_Y_OFFSET, 5, 3);
 
     // Right AUX Sliders (Far Right)
     display.drawLine(68 + OLED_X_OFFSET, 18 + OLED_Y_OFFSET, 68 + OLED_X_OFFSET, 26 + OLED_Y_OFFSET);
-    uint8_t aux2Y = map(channels[5], minChannelValue, maxChannelValue, 24, 16); // AUX 2
+    uint8_t aux2Y = (channels[5]==0) ? 24 : 16; // AUX 2
     display.drawBox(66 + OLED_X_OFFSET, aux2Y + OLED_Y_OFFSET, 5, 3);
 
     display.drawLine(68 + OLED_X_OFFSET, 30 + OLED_Y_OFFSET, 68 + OLED_X_OFFSET, 38 + OLED_Y_OFFSET);
-    uint8_t aux3Y = map(channels[6], minChannelValue, maxChannelValue, 36, 28); // AUX 2
+    uint8_t aux3Y =(channels[6]==0) ? 36 : 28; // AUX 3
     display.drawBox(66 + OLED_X_OFFSET, aux3Y + OLED_Y_OFFSET, 5, 3);
 
     // Send the partial display buffer to the physical screen hardware
@@ -228,38 +225,699 @@ void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16
     lastScreen = currentScreen;
 }
 
-void updateElrsStatsScreen(const ELRSLua& luaInstance) {
-      // U8g2 full frame buffer drawing process
-      display.clearBuffer();
-      
-      // NOTE: All drawing coordinates must add the OLED_X_OFFSET and OLED_Y_OFFSET 
-      // to map correctly onto the visible 72x40 matrix array.
-      
-      // Example Status Display Layout:
-    display.setFont(u8g2_font_nokiafc22_tf); 
+void drawElrsStatsScreen(const ELRS& elrs) {
+    // U8g2 full frame buffer drawing process
+    display.clearBuffer();
+
+    display.setFont(u8g2_font_squeezed_b7_tr); 
     display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 8);
-    display.print(luaInstance.txModule.name);
-    //u8g2_font_squeezed_b7_tr
+    if (strlen(elrs.txModule.name) > 0) {
+        display.print(elrs.txModule.name);
+        display.setFont(u8g2_font_NokiaSmallPlain_tr); 
+        display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 22);
 
-    display.setFont(u8g2_font_artossans8_8r); 
-    display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 22);
-    display.print(luaInstance.txModule.params[1].choices[luaInstance.txModule.params[1].currentVal].text); 
+        if (elrs.ready()) {
+            int index = elrs.txModule.params.findParamByLabel(LABEL_PACKET_RATE);
+            if (index >= 0) {
+                const crsfParameter &param = elrs.txModule.params.getParam(index);
+                display.print(param.choices[param.currentVal].text); 
+            } else {
+                display.print("Packet rate ???"); 
+            }
+            display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 36);
+            index = elrs.txModule.params.findParamByLabel(LABEL_TX_POWER_STRING);
+            if (index >= 0) {
+                const crsfParameter &param = elrs.txModule.params.getParam(index);
+                display.print(param.label); 
+            } else {
+                display.print("TX power ???"); 
+            }
 
-    display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 36);
-    display.print(luaInstance.txModule.params[7].choices[luaInstance.txModule.params[7].currentVal].text); 
-    display.print(luaInstance.txModule.params[7].units);
-    if (luaInstance.txModule.params[8].currentVal == 1) display.print(" (Dynamic)");
-      
-    // Optional: Draw a tiny visual frame bounding the visible screen region
-    //display.drawFrame(OLED_X_OFFSET, OLED_Y_OFFSET, OLED_WIDTH, OLED_HEIGHT);
-      
-    // Send local RAM buffer to the physical display
+        } else {
+            display.print("Loading Params...");
+        }
+
+    } else {
+        display.print("No TX Module");
+        display.setFont(u8g2_font_streamline_interface_essential_circle_triangle_t);
+        display.setCursor(OLED_X_OFFSET + 25, OLED_Y_OFFSET + 38);   
+        display.print("3"); // Icon set exclamation mark in triangle     
+    }
+
     display.sendBuffer();
     lastScreen = currentScreen;
-
 }
 
-void displayMessage(char title[], char line1[], char line2[]) {
+
+void drawChannelOutputsScreen(int16_t channels[], int16_t min, int16_t max) {
+    display.clearBuffer();
+    display.setFont(u8g2_font_5x7_tr); 
+    display.drawStr(OLED_X_OFFSET + 0, OLED_Y_OFFSET + 7, "Channel Output");
+
+    const char* labels[] = {"A", "E", "T", "R"};
+    const int16_t startX = OLED_X_OFFSET + 10;                     
+    const int16_t endX = OLED_X_OFFSET + 70;                       
+    const int16_t midX = startX + (endX - startX) / 2; 
+    const int16_t barHeight = 3;                   
+    
+    for (uint8_t i = 0; i < 4; i++) {
+        int16_t y = OLED_Y_OFFSET + 14 + (i * 8); 
+        
+        // Print channel designations
+        display.drawStr(OLED_X_OFFSET + 0, y + 3, labels[i]);
+        
+        // Framework
+        display.drawHLine(startX, y, endX - startX + 1);
+        display.drawVLine(startX, y - 2, 5);
+        display.drawVLine(midX, y - 2, 5);
+        display.drawVLine(endX, y - 2, 5);
+        
+        int16_t currentVal = channels[i];
+        if (currentVal < min) currentVal = min;
+        if (currentVal > max) currentVal = max;
+        
+        // Map channel to output
+        int16_t currentX = startX + (int32_t)(currentVal - min) * (endX - startX) / (max - min);
+        
+        if (currentX > midX) {
+            display.drawBox(midX, y - 1, currentX - midX + 1, barHeight);
+        } else if (currentX < midX) {
+            display.drawBox(currentX, y - 1, midX - currentX + 1, barHeight);
+        }
+    }
+    display.sendBuffer();
+    lastScreen = currentScreen;
+}
+
+ //----- Menu text animation timing configuration
+const unsigned long STATE_START_PAD  = 1000; 
+const unsigned long STATE_SCROLL     = 1000;  
+const unsigned long STATE_END_PAD    = 500;  
+const unsigned long TOTAL_CYCLE      = STATE_START_PAD + STATE_SCROLL + STATE_END_PAD;
+const int MAX_TEXT_LENGTH            = 64; // Theoretically ELRS could have longer strings, but not likely
+
+void drawScrollingMenuValue(const char* text, int textX, int textY, int displayAreaWidth) {
+    int textWidth = display.getStrWidth(text);
+
+    unsigned long currentMillis = millis();
+    static unsigned long lastResetTime = 0;
+    static char lastText[MAX_TEXT_LENGTH] = "";
+    enum ScrollState {START,SCROLLING,FINISH};
+    static ScrollState currentState = START;
+
+    // If text changes, reset state
+    if (strcmp(text, lastText) != 0) {
+        strncpy(lastText, text, sizeof(lastText) - 1);
+        lastText[sizeof(lastText) - 1] = '\0'; // Ensure null-termination
+        currentState = START;
+        lastResetTime = currentMillis;
+    }
+    
+    // Handle short text: Center statically without scrolling
+    if (textWidth <= displayAreaWidth) {
+        int centerX = textX + (displayAreaWidth - textWidth) / 2;
+        display.drawStr(centerX, textY, text);
+        return;
+    }
+
+    // Handle standard loop cycling
+    if (currentMillis - lastResetTime >= TOTAL_CYCLE) {
+        lastResetTime = currentMillis;
+    }
+    
+    unsigned long progress = currentMillis - lastResetTime;
+    int maxScrollDistance = textWidth - displayAreaWidth;
+    int currentXOffset = 0;
+
+    // State Machine
+    if (progress < STATE_START_PAD) {
+        currentXOffset = 0;
+    } 
+    else if (progress < (STATE_START_PAD + STATE_SCROLL)) {
+        unsigned long scrollProgress = progress - STATE_START_PAD;
+        currentXOffset = (maxScrollDistance * scrollProgress) / STATE_SCROLL;
+    } 
+    else {
+        currentXOffset = maxScrollDistance;
+    }
+
+    // Assume that setClipWindow has already been set appropriately
+    display.drawStr(textX - currentXOffset, textY, text);
+    // // Hardware clipping render
+    // display.setClipWindow(x, y, x + w, y + h);
+    // display.drawStr(x - currentXOffset, textY, text);
+    // display.setMaxClipWindow(); 
+}
+
+
+// Draw a menu item within a given window (top left coordinates and h/w set with x/y/h/w)
+void drawMenuItem(const crsfParameter& menuItem, int offsetX, int offsetY) {
+    int textWidth;
+    int centerX;
+    float floatVal;
+    static const int tenToThePowerOf[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+    char buffer[32];
+    display.setFont(u8g2_font_squeezed_b7_tr); 
+    switch (menuItem.type) {
+        case CRSF_FOLDER: // Folder will have a triangle on the right, so it has 5 pixels less width
+            // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+            display.setClipWindow(OLED_X_OFFSET+5, OLED_Y_OFFSET+5, OLED_X_OFFSET+OLED_WIDTH-7, OLED_Y_OFFSET+OLED_HEIGHT-5);
+            drawScrollingMenuValue(menuItem.label, OLED_X_OFFSET + 6 + offsetX, OLED_Y_OFFSET + 23 + offsetY, 62);
+            break;
+        case CRSF_COMMAND:
+        case CRSF_INFO:
+            // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+            display.setClipWindow(OLED_X_OFFSET+5, OLED_Y_OFFSET+5, OLED_X_OFFSET+OLED_WIDTH, OLED_Y_OFFSET+OLED_HEIGHT-5);
+            drawScrollingMenuValue(menuItem.label, OLED_X_OFFSET + 6 + offsetX, OLED_Y_OFFSET + 23 + offsetY, 67);
+            break;
+        case CRSF_UINT8:
+        case CRSF_INT8:
+        case CRSF_UINT16:
+        case CRSF_INT16:
+        case CRSF_UINT32:
+        case CRSF_INT32:
+        case CRSF_UINT64:
+        case CRSF_INT64:
+            // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+            // Scrolling text function only works for a single line, so just center the label, and scroll the value
+            display.setClipWindow(OLED_X_OFFSET+5, OLED_Y_OFFSET+5, OLED_X_OFFSET+OLED_WIDTH, OLED_Y_OFFSET+OLED_HEIGHT-5);
+            textWidth = display.getStrWidth(menuItem.label);
+            centerX = (OLED_WIDTH - textWidth) / 2;
+            display.drawStr(OLED_X_OFFSET + centerX + offsetX, OLED_Y_OFFSET + 15 + offsetY, menuItem.label);
+            display.setFont(u8g2_font_NokiaSmallPlain_tr);
+            snprintf(buffer, sizeof(buffer), "%d%s", (int32_t)menuItem.currentVal, menuItem.units);
+            drawScrollingMenuValue(buffer, OLED_X_OFFSET + 6 + offsetX, OLED_Y_OFFSET + 30 + offsetY, 62);
+            break;            
+        case CRSF_FLOAT:
+            // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+            // Scrolling text function only works for a single line, so just center the label, and scroll the value
+            display.setClipWindow(OLED_X_OFFSET+5, OLED_Y_OFFSET+5, OLED_X_OFFSET+OLED_WIDTH, OLED_Y_OFFSET+OLED_HEIGHT-5);
+            textWidth = display.getStrWidth(menuItem.label);
+            centerX = (OLED_WIDTH - textWidth) / 2;
+            display.drawStr(OLED_X_OFFSET + centerX + offsetX, OLED_Y_OFFSET + 15 + offsetY, menuItem.label);
+            display.setFont(u8g2_font_NokiaSmallPlain_tr);                
+            floatVal = (float) menuItem.currentVal / tenToThePowerOf[menuItem.precision];
+            snprintf(buffer, sizeof(buffer), "%.*f%s", menuItem.precision, floatVal, menuItem.units);
+            drawScrollingMenuValue(buffer, OLED_X_OFFSET + 6 + offsetX, OLED_Y_OFFSET + 30 + offsetY, 62);
+            break;
+        case CRSF_TEXT_SELECTION:
+            // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+            // Scrolling text function only works for a single line, so just center the label, and scroll the value
+            display.setClipWindow(OLED_X_OFFSET+5, OLED_Y_OFFSET+5, OLED_X_OFFSET+OLED_WIDTH, OLED_Y_OFFSET+OLED_HEIGHT-5);
+            textWidth = display.getStrWidth(menuItem.label);
+            centerX = (OLED_WIDTH - textWidth) / 2;
+            display.drawStr(OLED_X_OFFSET + centerX + offsetX, OLED_Y_OFFSET + 15 + offsetY, menuItem.label);
+            display.setFont(u8g2_font_NokiaSmallPlain_tr);                
+            drawScrollingMenuValue(menuItem.choices[menuItem.currentVal].text, OLED_X_OFFSET + 6 + offsetX, OLED_Y_OFFSET + 30 + offsetY, 62);
+            break;   
+    }
+    display.setMaxClipWindow(); // Reset clip window limits
+}
+
+
+// Animation configuration
+// 0 = No animation
+// 1 = Animate Up
+// 2 = Animate Down
+// 3 = Animate Left
+// 4 = Animate Right
+static uint8_t activeMenuAnimation = 0;   // Stores the current running animation type (1-4)
+static unsigned long menuAnimStartTime = 0;
+const unsigned long ANIM_DURATION = 500; // Transition duration in milliseconds
+// Menu Item tracking
+static int prevMenuItemIndex = 0;   // Track where we came from
+static int currentMenuItemIndex = 0;// Track where we are going
+
+void animateMenu(const ParamCollection& menu) {
+    if (activeMenuAnimation == 0) {
+        // Standard State: No active transition requested, render static layout normally
+        drawMenuItem(menu.getCurrentParam(), 0, 0);
+    } 
+    else {
+        // Animation Active: Calculate step frame interpolation
+        unsigned long elapsed = millis() - menuAnimStartTime;
+        
+        if (elapsed >= ANIM_DURATION) {
+            // Animation complete: clean state tracking parameters
+            activeMenuAnimation = 0;
+            drawMenuItem(menu.getCurrentParam(), 0, 0);
+        } 
+        else {
+            // Linear Progress mapping percentage (0.0 -> 1.0 represented out of 1000)
+            long progress = (elapsed * 1000) / ANIM_DURATION; 
+            
+            int offsetX_Prev = 0, offsetY_Prev = 0;
+            int offsetX_Curr = 0, offsetY_Curr = 0;
+
+            // Compute precise Pixel offsets based on target translation paths
+            switch (activeMenuAnimation) {
+                case 1: // Animate Up (New item enters from bottom)
+                    offsetY_Prev = - (OLED_HEIGHT * progress) / 1000;
+                    offsetY_Curr = OLED_HEIGHT - (OLED_HEIGHT * progress) / 1000;
+                    break;
+                case 2: // Animate Down (New item enters from top)
+                    offsetY_Prev = (OLED_HEIGHT * progress) / 1000;
+                    offsetY_Curr = -OLED_HEIGHT + (OLED_HEIGHT * progress) / 1000;
+                    break;
+                case 3: // Animate Left (New folder enters from right)
+                    offsetX_Prev = - (OLED_WIDTH * progress) / 1000;
+                    offsetX_Curr = OLED_WIDTH - (OLED_WIDTH * progress) / 1000;
+                    break;
+                case 4: // Animate Right (New folder enters from left)
+                    offsetX_Prev = (OLED_WIDTH * progress) / 1000;
+                    offsetX_Curr = -OLED_WIDTH + (OLED_WIDTH * progress) / 1000;
+                    break;
+            }
+
+            // Render both states into the active full-buffer layout sequentially
+            drawMenuItem(menu.getParam(prevMenuItemIndex), offsetX_Prev, offsetY_Prev);
+            drawMenuItem(menu.getParam(currentMenuItemIndex), offsetX_Curr, offsetY_Curr);
+        }
+    }    
+}
+
+
+// Draw a menu item within an edit window (offset coordinates specify where in the window it is drawn)
+void drawEditValue(const crsfParameter& menuItem, int32_t editValue, int offsetX, int offsetY) {
+    int textWidth;
+    int centerX;
+    float floatVal;
+    static const int tenToThePowerOf[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+    char buffer[32];
+    display.setFont(u8g2_font_NokiaSmallPlain_tr); 
+    switch (menuItem.type) {
+        case CRSF_UINT8:
+        case CRSF_INT8:
+        case CRSF_UINT16:
+        case CRSF_INT16:
+        case CRSF_UINT32:
+        case CRSF_INT32:
+        case CRSF_UINT64:
+        case CRSF_INT64:
+        case CRSF_FLOAT:
+            // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+            // Scrolling text function only works for a single line, so just center the label, and scroll the value
+            display.setClipWindow(OLED_X_OFFSET+1, OLED_Y_OFFSET+22, OLED_X_OFFSET+OLED_WIDTH-1, OLED_Y_OFFSET+OLED_HEIGHT-7);
+
+            if (menuItem.precision > 0) {
+                // Float handling
+                floatVal = (float) editValue / tenToThePowerOf[menuItem.precision];
+                snprintf(buffer, sizeof(buffer), "%.*f%s", menuItem.precision, floatVal, menuItem.units);
+            } 
+            else {
+                // Integer handling
+                snprintf(buffer, sizeof(buffer), "%d%s", (int32_t)editValue, menuItem.units);
+            }
+            textWidth = display.getStrWidth(buffer);
+            centerX = (OLED_WIDTH - textWidth) / 2;
+            display.drawStr(OLED_X_OFFSET + centerX + offsetX, OLED_Y_OFFSET + 31 + offsetY, buffer);
+            break;            
+
+        case CRSF_TEXT_SELECTION:
+            // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+            // Scrolling text function only works for a single line, so just center the label, and scroll the value
+            display.setClipWindow(OLED_X_OFFSET+10, OLED_Y_OFFSET+15, OLED_X_OFFSET+OLED_WIDTH-10, OLED_Y_OFFSET+OLED_HEIGHT-1);
+            snprintf(buffer, sizeof(buffer), "%s%s", menuItem.choices[editValue].text, menuItem.units);
+            textWidth = display.getStrWidth(buffer);
+            centerX = (OLED_WIDTH - textWidth) / 2;
+            display.drawStr(OLED_X_OFFSET + centerX + offsetX, OLED_Y_OFFSET + 31 + offsetY, buffer);
+            break;   
+    }
+    display.setMaxClipWindow(); // Reset clip window limits
+}
+
+// Animation configuration
+// 0 = No animation
+// 1 = Animate Up
+// 2 = Animate Down
+// 3 = Animate Left
+// 4 = Animate Right
+static uint8_t activeEditAnimation = 0;   // Stores the current running animation type (1-4)
+static unsigned long editAnimStartTime = 0;
+// Edit Value tracking
+static int prevEditValue = 0;   // Track where we came from
+static int currentEditValue = 0;// Track where we are going
+void animateEditValue(const ParamCollection& menu) {
+    if (activeEditAnimation == 0) {
+        // Standard State: No active transition requested, render static layout normally
+        drawEditValue(menu.getCurrentParam(), menu.editValue, 0, 0);
+    } 
+    else {
+        // Animation Active: Calculate step frame interpolation
+        unsigned long elapsed = millis() - editAnimStartTime;
+        
+        if (elapsed >= ANIM_DURATION) {
+            // Animation complete: clean state tracking parameters
+            activeEditAnimation = 0;
+            drawEditValue(menu.getCurrentParam(), menu.editValue, 0, 0);
+        } 
+        else {
+            // Linear Progress mapping percentage (0.0 -> 1.0 represented out of 1000)
+            long progress = (elapsed * 1000) / ANIM_DURATION; 
+            
+            int offsetX_Prev = 0, offsetY_Prev = 0;
+            int offsetX_Curr = 0, offsetY_Curr = 0;
+
+            // Compute precise Pixel offsets based on target translation paths
+            switch (activeEditAnimation) {
+                case 1: // Animate Up (New value enters from bottom)
+                    offsetY_Prev = - (OLED_HEIGHT * progress) / 1000;
+                    offsetY_Curr = OLED_HEIGHT - (OLED_HEIGHT * progress) / 1000;
+                    break;
+                case 2: // Animate Down (New value enters from top)
+                    offsetY_Prev = (OLED_HEIGHT * progress) / 1000;
+                    offsetY_Curr = -OLED_HEIGHT + (OLED_HEIGHT * progress) / 1000;
+                    break;
+                case 3: // Animate Left (New value enters from right)
+                    offsetX_Prev = - (OLED_WIDTH * progress) / 1000;
+                    offsetX_Curr = OLED_WIDTH - (OLED_WIDTH * progress) / 1000;
+                    break;
+                case 4: // Animate Right (New value enters from left)
+                    offsetX_Prev = (OLED_WIDTH * progress) / 1000;
+                    offsetX_Curr = -OLED_WIDTH + (OLED_WIDTH * progress) / 1000;
+                    break;
+            }
+
+            // Render both states into the active full-buffer layout sequentially
+            drawEditValue(menu.getCurrentParam(), prevEditValue, offsetX_Prev, offsetY_Prev);
+            drawEditValue(menu.getCurrentParam(), currentEditValue, offsetX_Curr, offsetY_Curr);
+        }
+    }    
+}
+
+// Copy of the previous drawScrollingMenuValue - since the popup may be getting displayed over such a menu item we need to track this state separately
+void drawScrollingPopupText(const char* text, int textX, int textY, int displayAreaWidth) {
+    int textWidth = display.getStrWidth(text);
+
+    unsigned long currentMillis = millis();
+    static unsigned long lastResetTime = 0;
+    static char lastText[MAX_TEXT_LENGTH] = "";
+    enum ScrollState {START,SCROLLING,FINISH};
+    static ScrollState currentState = START;
+
+    // If text changes, reset state
+    if (strcmp(text, lastText) != 0) {
+        strncpy(lastText, text, sizeof(lastText) - 1);
+        lastText[sizeof(lastText) - 1] = '\0'; // Ensure null-termination
+        currentState = START;
+        lastResetTime = currentMillis;
+    }
+    
+    // Handle short text: Center statically without scrolling
+    if (textWidth <= displayAreaWidth) {
+        int centerX = textX + (displayAreaWidth - textWidth) / 2;
+        display.drawStr(centerX, textY, text);
+        return;
+    }
+
+    // Handle standard loop cycling
+    if (currentMillis - lastResetTime >= TOTAL_CYCLE) {
+        lastResetTime = currentMillis;
+    }
+    
+    unsigned long progress = currentMillis - lastResetTime;
+    int maxScrollDistance = textWidth - displayAreaWidth;
+    int currentXOffset = 0;
+
+    // State Machine
+    if (progress < STATE_START_PAD) {
+        currentXOffset = 0;
+    } 
+    else if (progress < (STATE_START_PAD + STATE_SCROLL)) {
+        unsigned long scrollProgress = progress - STATE_START_PAD;
+        currentXOffset = (maxScrollDistance * scrollProgress) / STATE_SCROLL;
+    } 
+    else {
+        currentXOffset = maxScrollDistance;
+    }
+
+    // Assume that setClipWindow has already been set appropriately
+    display.drawStr(textX - currentXOffset, textY, text);
+}
+
+void drawPopup(const ParamCollection& menu) {
+    if (menu.popupActive()) {
+        // Clear a middle window block for readable message presentation
+        display.setDrawColor(0);
+        display.drawBox(3+OLED_X_OFFSET, 3+OLED_Y_OFFSET, OLED_WIDTH-6, OLED_HEIGHT-6); 
+        display.setDrawColor(1);
+        display.drawFrame(3+OLED_X_OFFSET, 3+OLED_Y_OFFSET, OLED_WIDTH-6, OLED_HEIGHT-6);
+
+        // Set clipping window boundary constraints to avoid drawing over the menu direction arrows
+        display.setClipWindow(5+OLED_X_OFFSET, 5+OLED_Y_OFFSET, OLED_X_OFFSET+OLED_WIDTH-10, OLED_Y_OFFSET+OLED_HEIGHT-10);
+        drawScrollingPopupText(menu.getCurrentParam().valueString, OLED_X_OFFSET + 5, OLED_Y_OFFSET + 17, OLED_WIDTH-10);
+        
+        switch (menu.getCurrentParam().step) {
+            case ELRS_COMMAND_EXECUTING:
+                // Maybe an animated cursor??
+                display.drawStr(7+OLED_X_OFFSET, OLED_Y_OFFSET+OLED_HEIGHT-12, "[Running...]");
+                break;
+            case ELRS_COMMAND_ASKCONFIRM:
+                display.drawStr(10+OLED_X_OFFSET, OLED_Y_OFFSET+OLED_HEIGHT-12, "[Confirm?]");
+                break;
+        }
+    }
+}
+
+
+// uint8_t direction
+// 0 = No move/button
+// 1 = Up
+// 2 = Down
+// 3 = Left
+// 4 = Right
+// 5 = Joystick button
+// 6 = Built in button (short press)
+// 7 = Built in button (long press)
+// return value
+// -1: Exit menu (back to prev screen)
+//  0: normal operation (editing, or navigating menu)
+//  1: Save menu item
+//  2: Execute command
+int navigateMenu(ParamCollection &menu, uint8_t direction) {
+    uint8_t nextMenuAnimation;
+    uint8_t nextEditAnimation;
+    int returnVal = 0;
+    if (direction == 0) return 0;
+    if (menu.popupActive()) {
+        switch (direction) {
+            case 5:
+                return 2;  // User confirmed a popup prompt
+                break;   
+            case 6:
+                return -1; // User pressed back to close the popup
+                break;   
+        }
+    }
+
+    switch (menuState) {
+        case MENU_BROWSE:
+            nextMenuAnimation = 0;
+            switch (direction) {
+                case 1:
+                    nextMenuAnimation = menu.prevInFolder();
+                    break;
+                case 2:
+                    nextMenuAnimation = menu.nextInFolder();
+                    break;
+                case 3:
+                    nextMenuAnimation = menu.exitFolder();
+                    break;
+                case 4:
+                    nextMenuAnimation = menu.enterFolder();
+                    break;
+                case 5:
+                    switch (menu.getCurrentParam().type) {
+                        case CRSF_COMMAND:
+                            returnVal = 2;
+                            break;
+                        case CRSF_UINT8:
+                        case CRSF_INT8:
+                        case CRSF_UINT16:
+                        case CRSF_INT16:
+                        case CRSF_UINT32:
+                        case CRSF_INT32:
+                        case CRSF_UINT64:
+                        case CRSF_INT64:
+                        case CRSF_FLOAT:
+                        case CRSF_TEXT_SELECTION:
+                        case CRSF_STRING:
+                            menu.editParam();
+                            menuState = MENU_EDIT;  // Change to edit mode
+                            break;
+                        default:
+                            // Do nothing
+                            break;   
+                    }
+                    break;
+                case 6:
+                    menu.selectedParam = 0;
+                    returnVal = -1;  // Exit out of menu
+                    break;
+                // case 7:Long press not handled in menu
+            }
+            // If the joystick movement resulted in an animation
+            if (nextMenuAnimation != 0) {
+                activeMenuAnimation = nextMenuAnimation;
+                menuAnimStartTime = millis(); // Start the timer clock
+                
+                // Capture current menu item index (selectedParam) before updating the active item
+                prevMenuItemIndex = currentMenuItemIndex;
+                currentMenuItemIndex = menu.selectedParam;
+            }            
+            break;
+
+
+        case MENU_EDIT:
+            nextEditAnimation = 0;
+            switch (direction) {
+                case 1:
+                    // Numeric/non-text selection types edited with up/down
+                    if (menu.getCurrentParam().type != CRSF_TEXT_SELECTION) nextEditAnimation = menu.editParamInc();
+                    break;
+                case 2:
+                    if (menu.getCurrentParam().type != CRSF_TEXT_SELECTION) nextEditAnimation = menu.editParamDec();
+                    break;
+                case 3:
+                    // Text Selection type is edited with left/right
+                    if (menu.getCurrentParam().type == CRSF_TEXT_SELECTION) nextEditAnimation = menu.editParamDec();
+                    break;
+                case 4:
+                    if (menu.getCurrentParam().type == CRSF_TEXT_SELECTION) nextEditAnimation = menu.editParamInc();
+                    break;
+                case 5:
+                    returnVal = 1;  // Indicate that we need to save the current item
+                    menuState = MENU_BROWSE;
+                    //menu.editParamSave();  // Save the menu (this function will also exit back to browse mode)
+                    break;
+                case 6:
+                    menu.editParam(); // reset editValue to the param's current value
+                    menuState = MENU_BROWSE;  // Go back to browse mode
+                    break;
+            }
+            // If the joystick movement resulted in an animation
+            if (nextEditAnimation != 0) {
+                activeEditAnimation = nextEditAnimation;
+                editAnimStartTime = millis(); // Start the timer clock
+                
+                // Capture current menu item index (selectedParam) before updating the active item
+                prevEditValue = currentEditValue;
+                currentEditValue = menu.editValue;
+            }       
+            break;
+    }
+
+    return returnVal;
+}
+
+
+void drawMenuScreen(const ParamCollection& menu) {
+    static int menuIndex;
+    static const int tenToThePowerOf[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+    float floatVal;
+    const crsfParameter &param = menu.getCurrentParam();
+
+    display.clearBuffer();
+    display.setFont(u8g2_font_NokiaSmallPlain_tr);    
+    
+    switch (menuState) {
+        case MENU_EDIT:
+            display.setCursor(OLED_X_OFFSET + 3, OLED_Y_OFFSET + 12);
+            display.print(param.label);
+            
+            display.drawFrame(0, 14, 72, 26);        
+
+            // Draw navigation arrows
+            if (menu.editValue > param.minVal) {   
+                if (param.type == CRSF_TEXT_SELECTION) {  
+                    display.setDrawColor(0);  // Left arrow
+                    display.drawBox(OLED_X_OFFSET, OLED_Y_OFFSET + 21, 6, 11);
+                    display.setDrawColor(1);
+                    display.drawTriangle(OLED_X_OFFSET + 5, OLED_Y_OFFSET + 22,
+                                         OLED_X_OFFSET + 5, OLED_Y_OFFSET + 30,
+                                         OLED_X_OFFSET    , OLED_Y_OFFSET + 26);
+                } else {                                 
+                    display.setDrawColor(0);  // Down arrow
+                    display.drawBox(OLED_X_OFFSET + 30, OLED_Y_OFFSET + 35, 11, 6);
+                    display.setDrawColor(1);
+                    display.drawTriangle(OLED_X_OFFSET + 31, OLED_Y_OFFSET + 34,
+                                         OLED_X_OFFSET + 39, OLED_Y_OFFSET + 34,
+                                         OLED_X_OFFSET + 35, OLED_Y_OFFSET + 39);
+                }
+            }
+            if (menu.editValue < param.maxVal) { 
+                if (param.type == CRSF_TEXT_SELECTION) {  
+                    display.setDrawColor(0);  //Right Arrow
+                    display.drawBox(OLED_X_OFFSET + 66, OLED_Y_OFFSET + 21, 6, 11);
+                    display.setDrawColor(1);                    
+                    display.drawTriangle(OLED_X_OFFSET + 67, OLED_Y_OFFSET + 22,
+                                         OLED_X_OFFSET + 67, OLED_Y_OFFSET + 30,
+                                         OLED_X_OFFSET + 72, OLED_Y_OFFSET + 26);
+                } else {                                  
+                    display.setDrawColor(0);  // Up Arrow
+                    display.drawBox(OLED_X_OFFSET + 30, OLED_Y_OFFSET + 14, 11, 6);
+                    display.setDrawColor(1);
+                    display.drawTriangle(OLED_X_OFFSET + 31, OLED_Y_OFFSET + 19,
+                                         OLED_X_OFFSET + 39, OLED_Y_OFFSET + 19,
+                                         OLED_X_OFFSET + 35, OLED_Y_OFFSET + 14);
+                }
+            }
+            // Draw or animate current edit value
+            animateEditValue(menu);
+            break;
+
+
+        default: //MENU_BROWSE
+
+            // Draw navigation arrows
+            if (param.id > 0) {                          // Up Arrow
+                display.setDrawColor(0);
+                display.drawBox(OLED_X_OFFSET + 30, OLED_Y_OFFSET + 0, 11, 6);
+                display.setDrawColor(1);
+                display.drawTriangle(OLED_X_OFFSET + 31, OLED_Y_OFFSET + 5,
+                                    OLED_X_OFFSET + 39, OLED_Y_OFFSET + 5,
+                                    OLED_X_OFFSET + 35, OLED_Y_OFFSET + 0);
+            }
+            if (param.id < menu.paramCount) {   // Down Arrrow
+                display.setDrawColor(0);
+                display.drawBox(OLED_X_OFFSET + 30, OLED_Y_OFFSET + 35, 11, 6);
+                display.setDrawColor(1);
+                display.drawTriangle(OLED_X_OFFSET + 31, OLED_Y_OFFSET + 36,
+                                    OLED_X_OFFSET + 39, OLED_Y_OFFSET + 36,
+                                    OLED_X_OFFSET + 35, OLED_Y_OFFSET + 40);
+            }    
+            if (param.parentFolder > 0) {               // Left Arrow
+                display.setDrawColor(0);
+                display.drawBox(OLED_X_OFFSET + 0, OLED_Y_OFFSET + 14, 5, 11);
+                display.setDrawColor(1);
+                display.drawTriangle(OLED_X_OFFSET + 4, OLED_Y_OFFSET + 15,
+                                    OLED_X_OFFSET + 4, OLED_Y_OFFSET + 23,
+                                    OLED_X_OFFSET + 0, OLED_Y_OFFSET + 19);
+            }    
+            if (param.type == CRSF_FOLDER) {             // Right Arrow
+                display.setDrawColor(0);
+                display.drawBox(OLED_X_OFFSET + 66, OLED_Y_OFFSET + 14, 5, 11);
+                display.setDrawColor(1);
+                display.drawTriangle(OLED_X_OFFSET + 67, OLED_Y_OFFSET + 15,
+                                    OLED_X_OFFSET + 67, OLED_Y_OFFSET + 23,
+                                    OLED_X_OFFSET + 71, OLED_Y_OFFSET + 19);
+            }
+
+            // Draw or animate current menu item
+            animateMenu(menu);
+            break;
+    }
+    // Draw popup over the current screen (if active). Realistically 
+    // this will cover everything we just drew, but this lets us later 
+    // animate if desired
+    drawPopup(menu);
+
+    display.sendBuffer();
+}
+
+
+
+void drawMessage(char title[], char line1[], char line2[]) {
     // U8g2 full frame buffer drawing process
     display.clearBuffer();
     // Ensure draw color is set to white/on
@@ -268,13 +926,13 @@ void displayMessage(char title[], char line1[], char line2[]) {
     // 1. Title
     // ==========================================
     // 7 pixel high Nokia font for title
-    display.setFont(u8g2_font_nokiafc22_tf); 
+    display.setFont(u8g2_font_squeezed_b6_tr); 
     
     int xOffset = (12 - strlen(title))*7;
     display.setCursor(xOffset + OLED_X_OFFSET, 8 + OLED_Y_OFFSET);
     display.print(title);
     
-    display.setFont(u8g2_font_squeezed_b6_tr); // Back to a tiny font (~5px baseline)
+    display.setFont(u8g2_font_nokiafc22_tf); // Back to a tiny font (~5px baseline)
 
     if(strlen(line2) > 0) {
         display.setCursor(2 + OLED_X_OFFSET, 22 + OLED_Y_OFFSET);
@@ -288,7 +946,7 @@ void displayMessage(char title[], char line1[], char line2[]) {
 }
 
 
-void showCalibrationScreen(int stage, int secondsLeft) {
+void drawCalibrationScreen(int stage, int secondsLeft) {
     display.clearBuffer();
     // Ensure draw color is set to white/on
     display.setDrawColor(1);
@@ -369,4 +1027,7 @@ void showCalibrationScreen(int stage, int secondsLeft) {
     // Send the frame buffer to the physical screen hardware
     display.sendBuffer();
 }
+
+
+
 

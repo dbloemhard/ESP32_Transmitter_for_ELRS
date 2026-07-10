@@ -25,11 +25,11 @@
 #define ELRS_RX   20
 
 // pins that used for the Joystick
-const uint8_t analogInPinAileron =  0;
-const uint8_t analogInPinElevator = 1;
-const uint8_t analogInPinThrottle = 3;
-const uint8_t analogInPinRudder =   4;
-const uint8_t VOLTAGE_READ_PIN =    2;
+const uint8_t STICK_RIGHT_X  = 0;
+const uint8_t STICK_RIGHT_Y = 1;
+const uint8_t STICK_LEFT_Y = 3;
+const uint8_t STICK_LEFT_X   = 4;
+const uint8_t ANALOG_PIN_VOLTAGE  = 2;
 
 // pins that used for the switch
 const uint8_t DIGITAL_PIN_SWITCH_ARM =  7;  // Arm switch

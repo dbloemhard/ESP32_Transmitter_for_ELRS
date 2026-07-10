@@ -302,7 +302,7 @@ uint32_t CRSF::crsfNextInterval() {
             case ELRS_RADIO_ID:
               crsfParseElrsSyncPacket(localPacketBuffer);  // Process sync packet immediately/dont add to queue
               break;
-            // Handle other telemetry types here, otherwise they get pushed to the telemetry queue packet (to be processed by elrsLua)
+            // Handle other telemetry types here, otherwise they get pushed to the telemetry queue packet (to be processed by elrsClass)
             default:
               telemetryQueue.push(localPacketBuffer, totalPacketBytesCount);
               break;

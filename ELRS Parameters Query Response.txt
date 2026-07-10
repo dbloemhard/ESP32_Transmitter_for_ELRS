@@ -1,0 +1,129 @@
+[ELRS] -> Querying Menu Parameter Index: 0, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 19 2B EA EE 0 0 0 B 48 6F 6F 4A 0 1 2 3 4 5 6 9 F 12 13 14 FF A1 
+Copied Initial Chunk: EA 19 2B EA EE 0 0 0 B 48 6F 6F 4A 0 1 2 3 4 5 6 9 F 12 13 14 FF A1 
+[ELRS] -> Querying Menu Parameter Index: 1, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 3E 2B EA EE 1 3 0 9 50 61 63 6B 65 74 20 52 61 74 65 0 35 30 48 7A 28 2D 31 31 35 64 42 6D 29 3B 31 30 30 48 7A 20 46 75 6C 6C 28 2D 31 31 32 64 42 6D 29 3B 31 35 30 48 7A 28 2D 31 8A 
+Copied Initial Chunk: EA 3E 2B EA EE 1 3 0 9 50 61 63 6B 65 74 20 52 61 74 65 0 35 30 48 7A 28 2D 31 31 35 64 42 6D 29 3B 31 30 30 48 7A 20 46 75 6C 6C 28 2D 31 31 32 64 42 6D 29 3B 31 35 30 48 7A 28 2D 31 8A 
+[ELRS] -> Querying Menu Parameter Index: 1, chunk: 1
+Received Packet type 0x2B
+Parsing param info packet: EA 3E 2B EA EE 1 2 31 32 64 42 6D 29 3B 32 35 30 48 7A 28 2D 31 30 38 64 42 6D 29 3B 33 33 33 48 7A 20 46 75 6C 6C 28 2D 31 30 35 64 42 6D 29 3B 35 30 30 48 7A 28 2D 31 30 35 64 42 6D 29 E 
+Copied Next Chunk: EA 3E 2B EA EE 1 3 0 9 50 61 63 6B 65 74 20 52 61 74 65 0 35 30 48 7A 28 2D 31 31 35 64 42 6D 29 3B 31 30 30 48 7A 20 46 75 6C 6C 28 2D 31 31 32 64 42 6D 29 3B 31 35 30 48 7A 28 2D 31 31 32 64 42 6D 29 3B 32 35 30 48 7A 28 2D 31 30 38 64 42 6D 29 3B 33 33 33 48 7A 20 46 75 6C 6C 28 2D 31 30 35 64 42 6D 29 3B 35 30 30 48 7A 28 2D 31 30 35 64 42 6D 29 E 
+[ELRS] -> Querying Menu Parameter Index: 1, chunk: 2
+Received Packet type 0x2B
+Parsing param info packet: EA 3E 2B EA EE 1 1 3B 44 32 35 30 28 2D 31 30 34 64 42 6D 29 3B 44 35 30 30 28 2D 31 30 34 64 42 6D 29 3B 46 35 30 30 28 2D 31 30 34 64 42 6D 29 3B 46 31 30 30 30 28 2D 31 30 34 64 42 6D E8 
+Copied Next Chunk: EA 3E 2B EA EE 1 3 0 9 50 61 63 6B 65 74 20 52 61 74 65 0 35 30 48 7A 28 2D 31 31 35 64 42 6D 29 3B 31 30 30 48 7A 20 46 75 6C 6C 28 2D 31 31 32 64 42 6D 29 3B 31 35 30 48 7A 28 2D 31 31 32 64 42 6D 29 3B 32 35 30 48 7A 28 2D 31 30 38 64 42 6D 29 3B 33 33 33 48 7A 20 46 75 6C 6C 28 2D 31 30 35 64 42 6D 29 3B 35 30 30 48 7A 28 2D 31 30 35 64 42 6D 29 3B 44 32 35 30 28 2D 31 30 34 64 42 6D 29 3B 44 35 30 30 28 2D 31 30 34 64 42 6D 29 3B 46 35 30 30 28 2D 31 30 34 64 42 6D 29 3B 46 31 30 30 30 28 2D 31 30 34 64 42 6D E8 
+[ELRS] -> Querying Menu Parameter Index: 1, chunk: 3
+Received Packet type 0x2B
+Parsing param info packet: EA D 2B EA EE 1 0 29 0 2 0 9 0 0 BD 
+Copied Next Chunk: EA 3E 2B EA EE 1 3 0 9 50 61 63 6B 65 74 20 52 61 74 65 0 35 30 48 7A 28 2D 31 31 35 64 42 6D 29 3B 31 30 30 48 7A 20 46 75 6C 6C 28 2D 31 31 32 64 42 6D 29 3B 31 35 30 48 7A 28 2D 31 31 32 64 42 6D 29 3B 32 35 30 48 7A 28 2D 31 30 38 64 42 6D 29 3B 33 33 33 48 7A 20 46 75 6C 6C 28 2D 31 30 35 64 42 6D 29 3B 35 30 30 48 7A 28 2D 31 30 35 64 42 6D 29 3B 44 32 35 30 28 2D 31 30 34 64 42 6D 29 3B 44 35 30 30 28 2D 31 30 34 64 42 6D 29 3B 46 35 30 30 28 2D 31 30 34 64 42 6D 29 3B 46 31 30 30 30 28 2D 31 30 34 64 42 6D 29 0 2 0 9 0 0 BD 
+[PARAMETER SAVED] Packet Rate | Choices(0-9): 50Hz(-115dBm), 100Hz Full(-112dBm), 150Hz(-112dBm), 250Hz(-108dBm), 333Hz Full(-105dBm), 500Hz(-105dBm), D250(-104dBm), D500(-104dBm), F500(-104dBm), F1000(-104dBm) | Active Selection: 150Hz(-112dBm)
+[ELRS] -> Querying Menu Parameter Index: 2, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 3E 2B EA EE 2 1 0 9 54 65 6C 65 6D 20 52 61 74 69 6F 0 53 74 64 3B 4F 66 66 3B 31 3A 31 32 38 3B 31 3A 36 34 3B 31 3A 33 32 3B 31 3A 31 36 3B 31 3A 38 3B 31 3A 34 3B 31 3A 32 3B 52 B8 
+Copied Initial Chunk: EA 3E 2B EA EE 2 1 0 9 54 65 6C 65 6D 20 52 61 74 69 6F 0 53 74 64 3B 4F 66 66 3B 31 3A 31 32 38 3B 31 3A 36 34 3B 31 3A 33 32 3B 31 3A 31 36 3B 31 3A 38 3B 31 3A 34 3B 31 3A 32 3B 52 B8 
+[ELRS] -> Querying Menu Parameter Index: 2, chunk: 1
+Received Packet type 0x2B
+Parsing param info packet: EA 16 2B EA EE 2 0 61 63 65 0 0 0 9 0 20 28 31 3A 33 32 29 0 3E 
+Copied Next Chunk: EA 3E 2B EA EE 2 1 0 9 54 65 6C 65 6D 20 52 61 74 69 6F 0 53 74 64 3B 4F 66 66 3B 31 3A 31 32 38 3B 31 3A 36 34 3B 31 3A 33 32 3B 31 3A 31 36 3B 31 3A 38 3B 31 3A 34 3B 31 3A 32 3B 52 61 63 65 0 0 0 9 0 20 28 31 3A 33 32 29 0 3E 
+[PARAMETER SAVED] Telem Ratio | Choices(0-9): Std, Off, 1:128, 1:64, 1:32, 1:16, 1:8, 1:4, 1:2, Race | Active Selection: Std (1:32)
+[ELRS] -> Querying Menu Parameter Index: 3, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 25 2B EA EE 3 0 0 9 53 77 69 74 63 68 20 4D 6F 64 65 0 57 69 64 65 3B 48 79 62 72 69 64 0 0 0 1 0 0 83 
+Copied Initial Chunk: EA 25 2B EA EE 3 0 0 9 53 77 69 74 63 68 20 4D 6F 64 65 0 57 69 64 65 3B 48 79 62 72 69 64 0 0 0 1 0 0 83 
+[PARAMETER SAVED] Switch Mode | Choices(0-1): Wide, Hybrid | Active Selection: Wide
+[ELRS] -> Querying Menu Parameter Index: 4, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 26 2B EA EE 4 0 0 9 4C 69 6E 6B 20 4D 6F 64 65 0 4E 6F 72 6D 61 6C 3B 4D 41 56 4C 69 6E 6B 0 0 0 1 0 0 6 
+Copied Initial Chunk: EA 26 2B EA EE 4 0 0 9 4C 69 6E 6B 20 4D 6F 64 65 0 4E 6F 72 6D 61 6C 3B 4D 41 56 4C 69 6E 6B 0 0 0 1 0 0 6 
+[PARAMETER SAVED] Link Mode | Choices(0-1): Normal, MAVLink | Active Selection: Normal
+[ELRS] -> Querying Menu Parameter Index: 5, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 28 2B EA EE 5 0 0 9 4D 6F 64 65 6C 20 4D 61 74 63 68 0 4F 66 66 3B 4F 6E 0 0 0 1 0 20 28 49 44 3A 20 30 29 0 D2 
+Copied Initial Chunk: EA 28 2B EA EE 5 0 0 9 4D 6F 64 65 6C 20 4D 61 74 63 68 0 4F 66 66 3B 4F 6E 0 0 0 1 0 20 28 49 44 3A 20 30 29 0 D2 
+[PARAMETER SAVED] Model Match | Choices(0-1): Off, On | Active Selection: Off (ID: 0)
+[ELRS] -> Querying Menu Parameter Index: 6, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 1F 2B EA EE 6 0 0 B 54 58 20 50 6F 77 65 72 20 28 32 35 6D 57 20 44 79 6E 29 0 7 8 FF 52 
+Copied Initial Chunk: EA 1F 2B EA EE 6 0 0 B 54 58 20 50 6F 77 65 72 20 28 32 35 6D 57 20 44 79 6E 29 0 7 8 FF 52 
+[PARAMETER SAVED] TX Power (25mW Dyn) | Menu (ID: 6)
+[ELRS] -> Querying Menu Parameter Index: 7, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 26 2B EA EE 7 0 6 9 4D 61 78 20 50 6F 77 65 72 0 31 30 3B 32 35 3B 35 30 3B 31 30 30 0 1 0 3 0 6D 57 0 34 
+Copied Initial Chunk: EA 26 2B EA EE 7 0 6 9 4D 61 78 20 50 6F 77 65 72 0 31 30 3B 32 35 3B 35 30 3B 31 30 30 0 1 0 3 0 6D 57 0 34 
+[PARAMETER SAVED] Max Power | Choices(0-3): 10, 25, 50, 100 | Active Selection: 25mW
+[ELRS] -> Querying Menu Parameter Index: 8, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 34 2B EA EE 8 0 6 9 44 79 6E 61 6D 69 63 0 4F 66 66 3B 44 79 6E 3B 41 55 58 39 3B 41 55 58 31 30 3B 41 55 58 31 31 3B 41 55 58 31 32 0 1 0 5 0 0 B7 
+Copied Initial Chunk: EA 34 2B EA EE 8 0 6 9 44 79 6E 61 6D 69 63 0 4F 66 66 3B 44 79 6E 3B 41 55 58 39 3B 41 55 58 31 30 3B 41 55 58 31 31 3B 41 55 58 31 32 0 1 0 5 0 0 B7 
+[PARAMETER SAVED] Dynamic | Choices(0-5): Off, Dyn, AUX9, AUX10, AUX11, AUX12 | Active Selection: Dyn
+[ELRS] -> Querying Menu Parameter Index: 9, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 20 2B EA EE 9 0 0 B 56 54 58 20 41 64 6D 69 6E 69 73 74 72 61 74 6F 72 0 A B C D E FF D0 
+Copied Initial Chunk: EA 20 2B EA EE 9 0 0 B 56 54 58 20 41 64 6D 69 6E 69 73 74 72 61 74 6F 72 0 A B C D E FF D0 
+[PARAMETER SAVED] VTX Administrator | Menu (ID: 9)
+[ELRS] -> Querying Menu Parameter Index: 10, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 22 2B EA EE A 0 9 9 42 61 6E 64 0 4F 66 66 3B 41 3B 42 3B 45 3B 46 3B 52 3B 4C 0 0 0 6 0 0 F2 
+Copied Initial Chunk: EA 22 2B EA EE A 0 9 9 42 61 6E 64 0 4F 66 66 3B 41 3B 42 3B 45 3B 46 3B 52 3B 4C 0 0 0 6 0 0 F2 
+[PARAMETER SAVED] Band | Choices(0-6): Off, A, B, E, F, R, L | Active Selection: Off
+[ELRS] -> Querying Menu Parameter Index: 11, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 15 2B EA EE B 0 9 0 43 68 61 6E 6E 65 6C 0 1 1 8 0 0 6F 
+Copied Initial Chunk: EA 15 2B EA EE B 0 9 0 43 68 61 6E 6E 65 6C 0 1 1 8 0 0 6F 
+[PARAMETER SAVED] Channel (1-8): 1
+[ELRS] -> Querying Menu Parameter Index: 12, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 27 2B EA EE C 0 9 9 50 77 72 20 4C 76 6C 0 2D 3B 31 3B 32 3B 33 3B 34 3B 35 3B 36 3B 37 3B 38 0 0 0 8 0 0 50 
+Copied Initial Chunk: EA 27 2B EA EE C 0 9 9 50 77 72 20 4C 76 6C 0 2D 3B 31 3B 32 3B 33 3B 34 3B 35 3B 36 3B 37 3B 38 0 0 0 8 0 0 50 
+[PARAMETER SAVED] Pwr Lvl | Choices(0-8): -, 1, 2, 3, 4, 5, 6, 7, 8 | Active Selection: -
+[ELRS] -> Querying Menu Parameter Index: 13, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 3E 2B EA EE D 2 9 89 50 69 74 6D 6F 64 65 0 4F 66 66 3B 4F 6E 3B 41 55 58 31 C0 3B 41 55 58 31 C1 3B 41 55 58 32 C0 3B 41 55 58 32 C1 3B 41 55 58 33 C0 3B 41 55 58 33 C1 3B 41 55 58 A1 
+Copied Initial Chunk: EA 3E 2B EA EE D 2 9 89 50 69 74 6D 6F 64 65 0 4F 66 66 3B 4F 6E 3B 41 55 58 31 C0 3B 41 55 58 31 C1 3B 41 55 58 32 C0 3B 41 55 58 32 C1 3B 41 55 58 33 C0 3B 41 55 58 33 C1 3B 41 55 58 A1 
+[ELRS] -> Querying Menu Parameter Index: 13, chunk: 1
+Received Packet type 0x2B
+Parsing param info packet: EA 3E 2B EA EE D 1 34 C0 3B 41 55 58 34 C1 3B 41 55 58 35 C0 3B 41 55 58 35 C1 3B 41 55 58 36 C0 3B 41 55 58 36 C1 3B 41 55 58 37 C0 3B 41 55 58 37 C1 3B 41 55 58 38 C0 3B 41 55 58 38 C1 EB 
+Copied Next Chunk: EA 3E 2B EA EE D 2 9 89 50 69 74 6D 6F 64 65 0 4F 66 66 3B 4F 6E 3B 41 55 58 31 C0 3B 41 55 58 31 C1 3B 41 55 58 32 C0 3B 41 55 58 32 C1 3B 41 55 58 33 C0 3B 41 55 58 33 C1 3B 41 55 58 34 C0 3B 41 55 58 34 C1 3B 41 55 58 35 C0 3B 41 55 58 35 C1 3B 41 55 58 36 C0 3B 41 55 58 36 C1 3B 41 55 58 37 C0 3B 41 55 58 37 C1 3B 41 55 58 38 C0 3B 41 55 58 38 C1 EB 
+[ELRS] -> Querying Menu Parameter Index: 13, chunk: 2
+Received Packet type 0x2B
+Parsing param info packet: EA 26 2B EA EE D 0 3B 41 55 58 39 C0 3B 41 55 58 39 C1 3B 41 55 58 31 30 C0 3B 41 55 58 31 30 C1 0 0 0 15 0 0 80 
+Copied Next Chunk: EA 3E 2B EA EE D 2 9 89 50 69 74 6D 6F 64 65 0 4F 66 66 3B 4F 6E 3B 41 55 58 31 C0 3B 41 55 58 31 C1 3B 41 55 58 32 C0 3B 41 55 58 32 C1 3B 41 55 58 33 C0 3B 41 55 58 33 C1 3B 41 55 58 34 C0 3B 41 55 58 34 C1 3B 41 55 58 35 C0 3B 41 55 58 35 C1 3B 41 55 58 36 C0 3B 41 55 58 36 C1 3B 41 55 58 37 C0 3B 41 55 58 37 C1 3B 41 55 58 38 C0 3B 41 55 58 38 C1 3B 41 55 58 39 C0 3B 41 55 58 39 C1 3B 41 55 58 31 30 C0 3B 41 55 58 31 30 C1 0 0 0 15 0 0 80 
+[PARAMETER SAVED] Pitmode | Choices(0-21): Off, On, AUX1 , AUX1 , AUX2 , AUX2 , AUX3 , AUX3 , AUX4 , AUX4 , AUX5 , AUX5 , AUX6 , AUX6 , AUX7 , AUX7 , AUX8 , AUX8 , AUX9 , AUX9 , AUX10 , AUX10  | Active Selection: Off
+[ELRS] -> Querying Menu Parameter Index: 14, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 14 2B EA EE E 0 9 D 53 65 6E 64 20 56 54 78 0 0 C8 0 BE 
+Copied Initial Chunk: EA 14 2B EA EE E 0 9 D 53 65 6E 64 20 56 54 78 0 0 C8 0 BE 
+[PARAMETER SAVED] Send VTx | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 15, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 1D 2B EA EE F 0 0 B 57 69 46 69 20 43 6F 6E 6E 65 63 74 69 76 69 74 79 0 10 11 FF 10 
+Copied Initial Chunk: EA 1D 2B EA EE F 0 0 B 57 69 46 69 20 43 6F 6E 6E 65 63 74 69 76 69 74 79 0 10 11 FF 10 
+[PARAMETER SAVED] WiFi Connectivity | Menu (ID: 15)
+[ELRS] -> Querying Menu Parameter Index: 16, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 17 2B EA EE 10 0 F D 45 6E 61 62 6C 65 20 57 69 46 69 0 0 C8 0 CD 
+Copied Initial Chunk: EA 17 2B EA EE 10 0 F D 45 6E 61 62 6C 65 20 57 69 46 69 0 0 C8 0 CD 
+[PARAMETER SAVED] Enable WiFi | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 17, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 1A 2B EA EE 11 0 F D 45 6E 61 62 6C 65 20 52 78 20 57 69 46 69 0 0 C8 0 8D 
+Copied Initial Chunk: EA 1A 2B EA EE 11 0 F D 45 6E 61 62 6C 65 20 52 78 20 57 69 46 69 0 0 C8 0 8D 
+[PARAMETER SAVED] Enable Rx WiFi | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 18, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 10 2B EA EE 12 0 0 D 42 69 6E 64 0 0 C8 0 85 
+Copied Initial Chunk: EA 10 2B EA EE 12 0 0 D 42 69 6E 64 0 0 C8 0 85 
+[PARAMETER SAVED] Bind | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 19, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 15 2B EA EE 13 0 0 8C 42 61 64 2F 47 6F 6F 64 0 30 2F 30 0 65 
+Copied Initial Chunk: EA 15 2B EA EE 13 0 0 8C 42 61 64 2F 47 6F 6F 64 0 30 2F 30 0 65 
+[PARAMETER SAVED] Bad/Good | Info String: 0/0
+[ELRS] -> Querying Menu Parameter Index: 20, chunk: 0
+Received Packet type 0x2B
+Parsing param info packet: EA 1C 2B EA EE 14 0 0 C 33 2E 36 2E 33 20 49 53 4D 32 47 34 0 32 38 38 65 66 65 0 B4 
+Copied Initial Chunk: EA 1C 2B EA EE 14 0 0 C 33 2E 36 2E 33 20 49 53 4D 32 47 34 0 32 38 38 65 66 65 0 B4 
+[PARAMETER SAVED] 3.6.3 ISM2G4 | Info String: 288efe
+[ELRS] >>> PARAMETER TREE MATRIX FULLY POPULATED AND CACHED <<<

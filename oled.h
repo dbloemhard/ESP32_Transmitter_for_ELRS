@@ -19,7 +19,8 @@
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <Wire.h>
-#include "elrsLua.h"
+#include "elrs.h"
+#include "params.h"
 #include <U8g2lib.h>
 
 extern U8G2_SSD1306_72X40_ER_F_HW_I2C display;
@@ -29,18 +30,37 @@ const int OLED_HEIGHT = 40;
 const int OLED_X_OFFSET = 0; //28; // Standard alignment for 0.42" 72x40 on 128px space
 const int OLED_Y_OFFSET = 0; //12; // Adjusted to shift the 40px matrix vertically if needed
 
-enum displayState {MAIN_PAGE, ELRS_STATS_PAGE};
+enum displayState {MAIN_PAGE, ELRS_STATS, ELRS_MENU, CHANNEL_OUTPUTS, CHANNEL_MENU, BT_JOYSTICK, BT_TRANSMITTER, CALIBRATION};
 extern displayState currentScreen; 
 extern displayState lastScreen;
+enum menuMode { MENU_BROWSE, MENU_EDIT };
+extern menuMode menuState;
 
 void initDisplay();
-void showBootLogo();
+void drawBootLogo();
 void clearScreen();
-void updateHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue);
-void updateElrsStatsScreen(const ELRSLua& luaInstance);
-void displayMessage(char title[], char line1[], char line2[]);
-void showCalibrationScreen(int stage, int secondsLeft);
-void nextScreen();  // Cycle screens
+void nextScreen();
+
+void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue);
+void drawElrsStatsScreen(const ELRS& elrs);
+void drawChannelOutputsScreen(int16_t channels[], int16_t min, int16_t max);
+void drawBtJoystickScreen();
+void drawBtTxScreen();
+
+void drawCalibrationScreen(int stage, int secondsLeft);
+
+void drawMenuScreen(const ParamCollection& menu);
+void drawScrollingMenuValue(const char* text, int textX, int textY, int displayAreaWidth);
+void drawMenuItem(const crsfParameter& menuItem, int offsetX, int offsetY);
+void animateMenu(const ParamCollection& menu);
+void drawEditValue(const crsfParameter& menuItem, int32_t editValue, int offsetX, int offsetY);
+void animateEditValue(const ParamCollection& menu);
+void drawScrollingPopupText(const char* text, int textX, int textY, int displayAreaWidth);
+void drawPopup(const ParamCollection& menu);
+int  navigateMenu(ParamCollection &menu, uint8_t direction);
+
+void drawMessage(char title[], char line1[], char line2[]);
+
 
 // NanoTX Logo
 // Dimensions: 72 x 40 pixels
@@ -88,13 +108,13 @@ const uint8_t nanotx_logo_72x40[] U8X8_PROGMEM = {
 };
 
 const uint8_t bt_logo_8x10[] = { B00001000, 
-                                B00011000, 
-                                B00101010, 
-                                B00011100, 
-                                B00001000, 
-                                B00011100, 
-                                B00101010, 
-                                B00011000, 
-                                B00001000,
-                                B00000000 };
+                                 B00011000, 
+                                 B00101010, 
+                                 B00011100, 
+                                 B00001000, 
+                                 B00011100, 
+                                 B00101010, 
+                                 B00011000, 
+                                 B00001000,
+                                 B00000000 };
 #endif
