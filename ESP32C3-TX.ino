@@ -766,7 +766,25 @@ void stickMenuNavigation() {
 
 // Flash Led and play buzzer depending on current state
 void statusDisplay(){
-    if (batteryVoltage < WARNING_VOLTAGE && batteryVoltage >= BEEPING_VOLTAGE) {
+    static int avg = -120;
+    int raw = -120;
+    int strength = 0;
+    char* type;
+
+    if (currentScreen == MODEL_FINDER) {
+        // If we are on the model finder screen, prioritize the LED display to show current state
+        // Calculations from https://github.com/iamsunilchahal/edgetx-lua-scripts-bw/blob/main/SCRIPTS/TOOLS/ELRS_Finder.lua
+        raw = crsfClass.telemetryActive ? crsfClass.linkStats.uplinkRssi1 : -120;
+        // Exponential moving average for stability
+        avg = 0.8 * avg + 0.2 * (raw);
+
+        // Map avg (~-110..-40) to 0..100 “strength”
+        strength = constrain( (avg + 110) * (100/(70)), 0, 100 );    // -110→0, -40→100
+
+        uint16_t period = constrain (1200 - (strength * 10), 100, 1200); // ticks (10ms each): 120→1.2s, 10→0.1s
+        blinkLED(DIGITAL_PIN_LED, period);
+
+    } else if (batteryVoltage < WARNING_VOLTAGE && batteryVoltage >= BEEPING_VOLTAGE) {
         blinkLED(DIGITAL_PIN_LED, 500);
     }else if(batteryVoltage < BEEPING_VOLTAGE && batteryVoltage >= ON_USB){
         blinkLED(DIGITAL_PIN_LED, 250);
@@ -816,7 +834,7 @@ void statusDisplay(){
                     //startBtJoystick();
                     //currentScreen = MAIN_PAGE;
                     break;
-                // Ignore long press builtin button in ELRS_MENU & CHANNEL_MENU
+                // Ignore long press builtin button in ELRS_MENU & CHANNEL_MENU & MODEL_FINDER
             }
         } else {
             if (currentScreen == ELRS_MENU) {
@@ -896,9 +914,9 @@ void statusDisplay(){
             // case BT_JOYSTICK: 
             //     drawBtJoystickScreen();
             //     break;
-            // case BT_TRANSMITTER: 
-            //     drawBtTxScreen();
-            //     break;
+            case MODEL_FINDER: 
+                drawModelFinderScreen(raw,avg,strength);
+                break;
         }     
     }
 }

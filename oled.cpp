@@ -60,7 +60,8 @@ void nextScreen() {
     switch (currentScreen) {
         case MAIN_PAGE:       currentScreen = ELRS_STATS;      break;
         case ELRS_STATS:      currentScreen = CHANNEL_OUTPUTS; break;
-        case CHANNEL_OUTPUTS: currentScreen = MAIN_PAGE;       break; // Wrap around
+        case CHANNEL_OUTPUTS: currentScreen = MODEL_FINDER;    break;
+        case MODEL_FINDER:    currentScreen = MAIN_PAGE;       break; // Wrap around
     }
 }
 
@@ -915,6 +916,26 @@ void drawMenuScreen(const ParamCollection& menu) {
     display.sendBuffer();
 }
 
+
+void drawModelFinderScreen(int raw, int avg, int strength) {
+    // U8g2 full frame buffer drawing process
+    display.clearBuffer();
+
+    display.setDrawColor(1);
+    // all values are negative (-120 ~ -20) so draw a little negative symbal (instead of full font width)
+    display.drawBox(0 + OLED_X_OFFSET, 15 + OLED_Y_OFFSET, 6, 3);
+    display.setFont(u8g2_font_logisoso28_tn); 
+    display.setCursor(8 + OLED_X_OFFSET, 28 + OLED_Y_OFFSET);
+    display.print(-raw);
+
+    display.setFont(u8g2_font_squeezed_b6_tr); 
+    display.setCursor(display.getCursorX()+2, 28 + OLED_Y_OFFSET);
+    display.print("dBm");
+    
+    display.drawBox(0 + OLED_X_OFFSET, 30 + OLED_Y_OFFSET, (strength * OLED_WIDTH / 100), 10);
+
+    display.sendBuffer();
+}
 
 
 void drawMessage(char title[], char line1[], char line2[]) {

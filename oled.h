@@ -30,7 +30,7 @@ const int OLED_HEIGHT = 40;
 const int OLED_X_OFFSET = 0; //28; // Standard alignment for 0.42" 72x40 on 128px space
 const int OLED_Y_OFFSET = 0; //12; // Adjusted to shift the 40px matrix vertically if needed
 
-enum displayState {MAIN_PAGE, ELRS_STATS, ELRS_MENU, CHANNEL_OUTPUTS, CHANNEL_MENU, BT_JOYSTICK, BT_TRANSMITTER, CALIBRATION};
+enum displayState {MAIN_PAGE, ELRS_STATS, ELRS_MENU, CHANNEL_OUTPUTS, CHANNEL_MENU, BT_JOYSTICK, MODEL_FINDER, CALIBRATION};
 extern displayState currentScreen; 
 extern displayState lastScreen;
 enum menuMode { MENU_BROWSE, MENU_EDIT };
@@ -58,6 +58,7 @@ void animateEditValue(const ParamCollection& menu);
 void drawScrollingPopupText(const char* text, int textX, int textY, int displayAreaWidth);
 void drawPopup(const ParamCollection& menu);
 int  navigateMenu(ParamCollection &menu, uint8_t direction);
+void drawModelFinderScreen(int raw, int avg, int strength);
 
 void drawMessage(char title[], char line1[], char line2[]);
 
