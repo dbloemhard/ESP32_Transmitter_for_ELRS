@@ -139,7 +139,7 @@ public:
 
     // Methods
     ELRS(CRSF& crsfInstance);   // initializer - pass in the CRSF instance so it can call its references.
-    void update();              // driver function
+    void update(bool menuActive);              // driver function
     void editParamSave();       // Save the selected parameter with the edit value
     void executeCommand();      // Execute, or Confirm the current command parameter
     void cancelCommand();       // Cancel the current command parameter

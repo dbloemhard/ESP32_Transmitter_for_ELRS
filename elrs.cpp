@@ -528,7 +528,7 @@ void ELRS::loadOneParam(uint8_t paramIndex) {
 // Main driver function
 // ========================================================
 
-void ELRS::update() {
+void ELRS::update(bool menuActive) {
     // First poll for incoming telemetry packets
     if (crsf.telemetryQueue.hasItems()) {
       crsfPacket telemetryPacket;
@@ -621,8 +621,7 @@ void ELRS::update() {
             break;
 
         case ELRS_READY:
-            // if (showMenu && now - lastHandshakeTime > 1000) {
-            if (now - lastHandshakeTime > 1000) {
+            if (menuActive && now - lastHandshakeTime > 1000) {
                 requestElrsStatus();
                 lastHandshakeTime = now;
 #ifdef ELRSDEBUG        

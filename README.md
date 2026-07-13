@@ -5,12 +5,12 @@ ESP32 C3 Nano sized ExpressLRS transmitter originally based on the Simple TX Ard
 
 Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an RC transmitter (soft and hardware) that is simple to build, and use.
 
-I am rewriting it to run on an ESP32 C3. This has an OLED screen and is small enough to make my TinyTX project even smaller. I am reading telemetry from the ELRS module, to display, and modify as required
+I am rewriting it to run on an ESP32 C3. This has an OLED screen and is small enough to make my TinyTX project even smaller. I am reading telemetry from the ELRS module and implemented the full ELRS Lua script for configuring ELRS as well as the handset.
 
 # THIS IS A W.I.P.
 https://youtube.com/shorts/-rPwNI36CTY?feature=share
 
-The radio works, and i have flown around my room with it. ELRS transmitter telemetry is working, and the configuration menu is usable to change ELRS settings. Command menu items (Bind, enable wifi) are not currently implemented. 3D print design could be better - The version 2 i uploaded does not print well on my printer, and the initial version needs to be glued together.
+The radio works, and i have flown around my room with it. ELRS transmitter telemetry is working, and the configuration menu is usable to change ELRS settings. Version 3 of the 3D print finally fits everything and can be screwed together using m1.2x6 whoop canopy screws. From here on in its mainly going to be code bug fixes, and maybe i'll come up with another 3d print design.
 
 Currently outstanding code tasks:
 * Bluetooth joystick using ESP32-BLE-Gamepad library (RX as a TX does not suport BLE Joystick so need to implement it myself)

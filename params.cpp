@@ -64,7 +64,7 @@ int ParamCollection::getParamSlot(uint8_t id) {
 uint8_t ParamCollection::nextInFolder() {
     uint8_t parentFolder = params[selectedParam].parentFolder;
 
-    for (uint8_t i = selectedParam + 1; i < paramCount; i++) {
+    for (int8_t i = selectedParam + 1; i < paramCount; i++) {
         if (params[i].parentFolder == parentFolder && !params[i].hidden) {
             selectedParam = i;
             return 1; // Moved down, scroll up
@@ -72,7 +72,7 @@ uint8_t ParamCollection::nextInFolder() {
     }
     // if we got here it means there were no other entries at this folder level
     // Now go back to the start and find the first item in the folder
-    for (uint8_t i = 0; i < selectedParam; i++) {
+    for (int8_t i = 0; i < selectedParam; i++) {
         if (params[i].parentFolder == parentFolder && !params[i].hidden) {
             selectedParam = i;
             return 2;
@@ -85,15 +85,16 @@ uint8_t ParamCollection::nextInFolder() {
 uint8_t ParamCollection::prevInFolder() {
     uint8_t parentFolder = params[selectedParam].parentFolder;
 
-    for (uint8_t i = selectedParam - 1; i >= 0; i--) {
+    for (int8_t i = selectedParam - 1; i >= 0; i--) {
         if (params[i].parentFolder == parentFolder && !params[i].hidden) {
             selectedParam = i;
             return 2; // Moved up, scroll down
         }
     }
+    
     // if we got here it means there were no other entries at this folder level
     // Now search backwards from the end and find the last item in the folder.
-    for (uint8_t i = paramCount - 1; i > selectedParam ; i--) {
+    for (int8_t i = paramCount - 1; i > selectedParam ; i--) {
         if (params[i].parentFolder == parentFolder && !params[i].hidden) {
             selectedParam = i;
             return 1;

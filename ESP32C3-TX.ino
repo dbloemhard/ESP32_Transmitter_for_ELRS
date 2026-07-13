@@ -816,10 +816,6 @@ void statusDisplay(){
                     //startBtJoystick();
                     //currentScreen = MAIN_PAGE;
                     break;
-                case BT_TRANSMITTER: 
-                    //startBtTx();
-                    //currentScreen = MAIN_PAGE;
-                    break;
                 // Ignore long press builtin button in ELRS_MENU & CHANNEL_MENU
             }
         } else {
@@ -1076,7 +1072,7 @@ void loop()
 
         // -------------------------------------------------
         // Poll the telemetry data and run lua script logic
-        elrsClass.update();       
+        elrsClass.update(currentScreen == ELRS_MENU);       
 
         // --------------------------------
         // Send RC data to external module
