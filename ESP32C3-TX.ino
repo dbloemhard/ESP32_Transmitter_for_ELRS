@@ -16,9 +16,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
+ * <http://www.gnu.org/licenses/>.
  */
 
 #include <Arduino.h>
@@ -63,12 +61,7 @@ FilterState filteredRaw;
 
 float batteryVoltage;
 
-bool calibrationRequested=false;
 bool ARMED = false;
-
-int previous_throttle = 191;
-const uint32_t longPressDuration = 1500;  // Used for long press of builtin button
-const uint32_t shortPressDuration = 100;  // Used for debounce of builtin/joystick buttons
 
 // 0 = No move/button
 // 1 = Up
@@ -80,33 +73,41 @@ const uint32_t shortPressDuration = 100;  // Used for debounce of builtin/joysti
 // 7 = Built in button (long press)
 uint8_t navigate = 0;
 
-//----- global variables for tone/led --------------
-unsigned long previousToneMillis = 0;
-bool started=false;
-uint8_t ledState = LOW;
-unsigned long previousLedMillis = 0;
-void blinkLED(int ledPin, uint16_t blinkRate);
+//----- function headers ----------------------------------
+inline int32_t lowLatencyFilter(int32_t currentRaw, int32_t *previousFiltered);
+int16_t calibrate(int16_t raw, int16_t minVal, int16_t centerVal, int16_t maxVal);
+int32_t applyCyclicExpo(int32_t stickDiff, uint8_t expoFactor);
+int32_t applyThrottleExpo(int32_t adcVal, uint8_t expoFactor);
+uint16_t processStick(int32_t adcValue, uint8_t chIndex);
+void mapChannels();
+void getAnalogInputs();
+void getDigitalInputs();
+void checkGestureSetting();
+bool checkStickMove();
 void playTone(uint8_t timesPerSecond);
+void blinkLED(int ledPin, uint16_t blinkRate);
+void stickMenuNavigation();
+void statusDisplay();
+void logData();
 
 //----- global variables for ELRS -------------------------
-bool bindStarted = false;
-bool wifiStarted = false;
-
 int16_t rcChannels[CRSF_MAX_CHANNEL];
-uint32_t crsfTime = 0;
-uint32_t lastModuleRequestTime = 0;
 CRSF crsfClass;
-
-// Instantiate application layer, passing driver object to it
+// Instantiate ELRS (Module) class, passing CRSF driver object to it
 ELRS elrsClass(crsfClass);
-
 
 // -----------------------------------------------------------------------------------------------------
 // Calibration functions
 // -----------------------------------------------------------------------------------------------------
+void calibrationLoad();
+void calibrationSave();
+void calibrationChirp(uint8_t times);
+bool calibrationRun();
+
 Preferences prefs;
 #define CALIB_CENT_TMO  5000    //ms
 #define CALIB_MOVE_TMO  15000   // ms
+bool calibrationRequested=false;
 uint32_t calibrationTimerStart;
 int      cal_reset = 0 ;
 
@@ -334,31 +335,6 @@ bool calibrationRun() {
 // -----------------------------------------------------------------------------------------------------
 // Handle analog input
 // -----------------------------------------------------------------------------------------------------
-inline int32_t lowLatencyFilter(int32_t currentRaw, int32_t *previousFiltered) {
-    if (globalSettings.adcFilter && *previousFiltered > 0) {
-        // IIR Filter implementation using fast integer bit-shifting:
-        // NewFiltered = PreviousFiltered + ((CurrentRaw - PreviousFiltered) >> FILTER_SHIFT)
-        *previousFiltered = *previousFiltered + ((currentRaw - *previousFiltered) >> FILTER_SHIFT);
-    }
-    else {
-        *previousFiltered = currentRaw;
-    }
-    return *previousFiltered;
-}
-
-// Calibration maps top and bottom parts of stick deflections separately to account for uneven ADC ranges
-int16_t calibrate(int16_t raw, int16_t minVal, int16_t centerVal, int16_t maxVal) {
-    raw = constrain(raw, minVal, maxVal);
-    
-    if (raw <= centerVal) {
-        // Map lower half of stick deflection 
-        return map(raw, minVal, centerVal, ADC_MIN, ADC_MID);
-    } else {
-        // Map upper half of stick deflection
-        return map(raw, centerVal, maxVal, ADC_MID+1, ADC_MAX);
-    }
-}
-
 void getAnalogInputs() {
     // Read Voltage
     rawValues.voltage = analogRead(ANALOG_PIN_VOLTAGE);
@@ -396,6 +372,92 @@ void getAnalogInputs() {
         stickValues.leftX   = ADC_MAX-stickValues.leftX;
     #endif
 
+    // 5. Check if the current movement qualifies for menu navigation
+    stickMenuNavigation();
+
+}
+
+// Use right joystick for menu navigation
+// Moving past the threshold (50% throw) will move once in that direction
+// Go back below the threshold for 100ms before you can initiate another move in any direction
+void stickMenuNavigation() {
+    // Timers for filtering noise (debouncing)
+    static uint32_t centerStartTime = 0;
+    static uint32_t deflectionStartTime = 0;
+    
+    // State tracking variables
+    static bool isCentered = true;       // True if joystick is confirmed at center
+    static bool hasNavigated = false;    // Prevents continuous triggers while holding
+    static uint8_t pendingDirection = 0; // Temporarily stores the direction being debounced
+
+    uint32_t currentMillis = millis();
+    navigate = 0; // Reset navigate variable at the start of each loop
+
+    // Check if joystick is currently physically in the center zone
+    bool stickCentered = (stickValues.rightY > RC_MIN_COMMAND && stickValues.rightY < RC_MAX_COMMAND &&
+                               stickValues.rightX  > RC_MIN_COMMAND && stickValues.rightX  < RC_MAX_COMMAND);
+
+    // Handle Center Debouncing
+    if (stickCentered) {
+        deflectionStartTime = 0; // Reset deflection timer
+        if (centerStartTime == 0) {
+            centerStartTime = currentMillis; // Start center debounce timer
+        } else if (currentMillis - centerStartTime >= shortPressDuration) {
+            isCentered = true;   // Joystick is officially centered
+            hasNavigated = false; // Reset navigation lock for the next movement
+        }
+    } 
+    // Handle Deflection Debouncing & Navigation
+    else {
+        centerStartTime = 0; // Reset center timer
+        
+        // Determine current physical direction of deflection
+        uint8_t currentDirection = 0;
+        if (stickValues.rightY >= RC_MAX_COMMAND)       currentDirection = 1; // Up
+        else if (stickValues.rightY <= RC_MIN_COMMAND)  currentDirection = 2; // Down
+        else if (stickValues.rightX <= RC_MIN_COMMAND)  currentDirection = 3; // Left
+        else if (stickValues.rightX >= RC_MAX_COMMAND)  currentDirection = 4; // Right
+
+        // If the direction changed mid-deflection, reset the deflection timer
+        if (currentDirection != pendingDirection) {
+            deflectionStartTime = currentMillis;
+            pendingDirection = currentDirection;
+        } 
+        // If held in the same direction for long enough, check if we can navigate
+        else if (currentMillis - deflectionStartTime >= shortPressDuration) {
+            if (isCentered && !hasNavigated) {
+                navigate = pendingDirection; // Trigger the menu action
+                hasNavigated = true;         // Lock execution until center return
+                isCentered = false;          // No longer marked as centered
+            }
+        }
+    }
+}
+
+// ADC Filtering, since ESP32 ADCs are supposed to be noisy
+inline int32_t lowLatencyFilter(int32_t currentRaw, int32_t *previousFiltered) {
+    if (globalSettings.adcFilter && *previousFiltered > 0) {
+        // IIR Filter implementation using fast integer bit-shifting:
+        // NewFiltered = PreviousFiltered + ((CurrentRaw - PreviousFiltered) >> FILTER_SHIFT)
+        *previousFiltered = *previousFiltered + ((currentRaw - *previousFiltered) >> FILTER_SHIFT);
+    }
+    else {
+        *previousFiltered = currentRaw;
+    }
+    return *previousFiltered;
+}
+
+// Calibration maps top and bottom parts of stick deflections separately to account for uneven ADC ranges
+int16_t calibrate(int16_t raw, int16_t minVal, int16_t centerVal, int16_t maxVal) {
+    raw = constrain(raw, minVal, maxVal);
+    
+    if (raw <= centerVal) {
+        // Map lower half of stick deflection 
+        return map(raw, minVal, centerVal, ADC_MIN, ADC_MID);
+    } else {
+        // Map upper half of stick deflection
+        return map(raw, centerVal, maxVal, ADC_MID+1, ADC_MAX);
+    }
 }
 
 // Expo function for Aileron, Elevator, Rudder (Zero-Centered: -1024 to +1024)
@@ -510,10 +572,10 @@ void mapChannels() {
             rcChannels[RUDDER]    = processStick(stickValues.rightX, 3); 
             break;
     }
-    // rcChannels[AILERON]   = map(stickValues.rightX, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX); 
-    // rcChannels[ELEVATOR]  = map(stickValues.leftY,  ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
-    // rcChannels[THROTTLE]  = map(stickValues.rightY, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
-    // rcChannels[RUDDER]    = map(stickValues.leftX,  ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
+
+    rcChannels[AUX1] = (stickValues.AUX1 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
+    rcChannels[AUX2] = (stickValues.AUX2 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
+    rcChannels[AUX3] = (stickValues.AUX3 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;    
 }
 
 
@@ -522,6 +584,7 @@ void getDigitalInputs(){
      * Handle digital input
      */
     
+    // ESP32-C3 Built in Button 
     static uint32_t buttonPressedTime = 0;
     if (digitalRead(DIGITAL_PIN_BUTTON) == LOW) {
         if (buttonPressedTime == 0)
@@ -541,6 +604,7 @@ void getDigitalInputs(){
         }
     }
 
+    // Left Joystick/Arm button
     static uint32_t aux1PressedTime = 0;
     if (digitalRead(DIGITAL_PIN_SWITCH_ARM) == LOW) {
         if (aux1PressedTime == 0)
@@ -556,10 +620,14 @@ void getDigitalInputs(){
                 }
             } else if (pressDuration >= shortPressDuration) {
                 stickValues.AUX1 = !stickValues.AUX1; // Toggle AUX1
+
+                // Global ARMED indicator
+                ARMED = stickValues.AUX1;
             }
         }
     }
 
+    // Right Joystick/Aux2/3 button
     static uint32_t aux2PressedTime = 0;
     if (digitalRead(DIGITAL_PIN_SWITCH_AUX2) == LOW) {
         if (aux2PressedTime == 0)
@@ -579,12 +647,6 @@ void getDigitalInputs(){
             }
         }
     }
-    rcChannels[AUX1] = (stickValues.AUX1 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
-    rcChannels[AUX2] = (stickValues.AUX2 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
-    rcChannels[AUX3] = (stickValues.AUX3 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
-
-    // Global ARMED indicator
-    ARMED = stickValues.AUX1;
 }
 
 // -----------------------------------------------------------------------------------------------------
@@ -596,72 +658,29 @@ void checkGestureSetting() {
     static uint32_t armTimer = 0;            // Records when the switch was turned on
     static bool gestureTriggerReady = false; // Arming arm-switch trigger sequence flag
 
-    // 1. Detect the moment the switch goes from DISARMED to ARMED (Rising Edge)
+    // Detect the moment the switch goes from DISARMED to ARMED (Rising Edge)
     if (currentArmState && !lastArmState) {
         armTimer = millis();
         gestureTriggerReady = true; 
     }
 
-    // 2. Detect the moment the switch goes from ARMED back to DISARMED (Falling Edge)
+    // Detect the moment the switch goes from ARMED back to DISARMED (Falling Edge)
     if (!currentArmState && lastArmState) {
         // Debounce: Ensure it was held armed for at least 1000ms
         if (gestureTriggerReady && (millis() - armTimer >= 1000)) {
-            selectSetting(); 
+            //selectSetting();    // Previously used for selecting from a set of ELRS presets. Future use for selecting between model presets?
             gestureTriggerReady = false; 
         }
     }
     lastArmState = currentArmState;
 }
 
-void selectSetting() {
-    // startup stick commands (rate/power selection / initiate bind / turn on tx module wifi)
-    // Right stick:
-    // Up Left - Rate/Power setting 1 (250hz / 100mw / Dynamic)
-    // Up Right - Rate/Power setting 2 (50hz / 100mw)
-    // Down Left - Start TX bind (for 3.4.2 it is now possible to bind to RX easily). Power cycle after binding
-    // Down Right - Start TX module wifi (for firmware update etc)
-    // Left Stick
-    // Throttle MAX - Enable Head Tracking (if defines are set)
-
-    if (stickValues.rightX < RC_MIN_COMMAND && stickValues.rightY > RC_MAX_COMMAND) { // Elevator up + aileron left
-        crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, SETTING_1_PktRate);
-        crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, SETTING_1_Power);
-        crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, SETTING_1_Dynamic);
-    } else if (stickValues.rightX > RC_MAX_COMMAND && stickValues.rightY > RC_MAX_COMMAND) { // Elevator up + aileron right
-        crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, SETTING_2_PktRate);
-        crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, SETTING_2_Power);
-        crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, SETTING_2_Dynamic);
-    } else if (stickValues.rightX < RC_MIN_COMMAND && stickValues.rightY < RC_MIN_COMMAND) { // Elevator down + aileron left
-        if (!wifiStarted) {  // cant start bind while wifi is active
-            if (bindStarted) {
-                crsfClass.crsfSendCommand(ELRS_BIND_COMMAND, ELRS_END_COMMAND);
-                bindStarted = false;
-            }
-            else {
-                crsfClass.crsfSendCommand(ELRS_BIND_COMMAND, ELRS_START_COMMAND);
-                bindStarted = true;
-            }
-        }
-    } else if (stickValues.rightX > RC_MAX_COMMAND && stickValues.rightY < RC_MIN_COMMAND) { // Elevator down + aileron right
-        crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
-        if (!bindStarted) {  // cant start wifi while bind is active
-            if (wifiStarted) {
-                crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_END_COMMAND);
-                wifiStarted = false;
-            }
-            else {
-                crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
-                wifiStarted = true;
-            }
-        }
-    }
-}
-
-bool checkStickMove(){
+bool checkThrottleIdleTimeout(){
+    static int previous_throttle = 191;
     static int stickMoved = 0;
     static uint32_t stickMovedMillis = 0;
 
-    // check if stick moved, warring after 10 minutes
+    // check if throttle stick moved, warning after 5 minutes
     if(abs(previous_throttle - rcChannels[THROTTLE]) < 30){
         stickMoved = 0;
         //Serial.println(abs(previous_throttle - rcChannels[THROTTLE]));
@@ -680,6 +699,7 @@ bool checkStickMove(){
 }
 
 void playTone(uint8_t timesPerSecond) {
+    // static uint32_t previousToneMillis = 0;
     // unsigned long currentMillis = millis();
     // //ACTIVE_BUZZER / VIBRATOR
     // if (currentMillis - previousToneMillis <= timesPerSecond*100) {
@@ -697,6 +717,8 @@ void playTone(uint8_t timesPerSecond) {
 }
 
 void blinkLED(int ledPin, uint16_t blinkRate) {
+    static uint8_t ledState = LOW;
+    static uint32_t previousLedMillis = 0;
     uint32_t currentMillis = millis();
 
     if (currentMillis - previousLedMillis >= blinkRate) {
@@ -706,63 +728,6 @@ void blinkLED(int ledPin, uint16_t blinkRate) {
     }
 }
 
-
-// Use right joystick for menu navigation
-// Moving past the threshold (50% throw) will move once in that direction
-// Go back below the threshold for 100ms before you can initiate another move in any direction
-void stickMenuNavigation() {
-    // Timers for filtering noise (debouncing)
-    static uint32_t centerStartTime = 0;
-    static uint32_t deflectionStartTime = 0;
-    
-    // State tracking variables
-    static bool isCentered = true;       // True if joystick is confirmed at center
-    static bool hasNavigated = false;    // Prevents continuous triggers while holding
-    static uint8_t pendingDirection = 0; // Temporarily stores the direction being debounced
-
-    uint32_t currentMillis = millis();
-    navigate = 0; // Reset navigate variable at the start of each loop
-
-    // Check if joystick is currently physically in the center zone
-    bool stickCentered = (stickValues.rightY > RC_MIN_COMMAND && stickValues.rightY < RC_MAX_COMMAND &&
-                               stickValues.rightX  > RC_MIN_COMMAND && stickValues.rightX  < RC_MAX_COMMAND);
-
-    // Handle Center Debouncing
-    if (stickCentered) {
-        deflectionStartTime = 0; // Reset deflection timer
-        if (centerStartTime == 0) {
-            centerStartTime = currentMillis; // Start center debounce timer
-        } else if (currentMillis - centerStartTime >= shortPressDuration) {
-            isCentered = true;   // Joystick is officially centered
-            hasNavigated = false; // Reset navigation lock for the next movement
-        }
-    } 
-    // Handle Deflection Debouncing & Navigation
-    else {
-        centerStartTime = 0; // Reset center timer
-        
-        // Determine current physical direction of deflection
-        uint8_t currentDirection = 0;
-        if (stickValues.rightY >= RC_MAX_COMMAND)      currentDirection = 1; // Up
-        else if (stickValues.rightY <= RC_MIN_COMMAND) currentDirection = 2; // Down
-        else if (stickValues.rightX <= RC_MIN_COMMAND)  currentDirection = 3; // Left
-        else if (stickValues.rightX >= RC_MAX_COMMAND)  currentDirection = 4; // Right
-
-        // If the direction changed mid-deflection, reset the deflection timer
-        if (currentDirection != pendingDirection) {
-            deflectionStartTime = currentMillis;
-            pendingDirection = currentDirection;
-        } 
-        // If held in the same direction for long enough, check if we can navigate
-        else if (currentMillis - deflectionStartTime >= shortPressDuration) {
-            if (isCentered && !hasNavigated) {
-                navigate = pendingDirection; // Trigger the menu action
-                hasNavigated = true;         // Lock execution until center return
-                isCentered = false;          // No longer marked as centered
-            }
-        }
-    }
-}
 
 // Flash Led and play buzzer depending on current state
 void statusDisplay(){
@@ -789,27 +754,18 @@ void statusDisplay(){
     }else if(batteryVoltage < BEEPING_VOLTAGE && batteryVoltage >= ON_USB){
         blinkLED(DIGITAL_PIN_LED, 250);
         playTone(2);
-    }else if(bindStarted){
-        blinkLED(DIGITAL_PIN_LED, 100);  // Bind (fast flash)
-    }else if(wifiStarted){
-        blinkLED(DIGITAL_PIN_LED, 1000); // Wifi (slow flash)
     }
 
     // check stick idle timer
-    if (checkStickMove() == true){
+    if (checkThrottleIdleTimeout() == true){
         blinkLED(DIGITAL_PIN_LED, 100);
         playTone(5);
     }
 
     // OLED Screen update
-    // First check if we are in the ELRS Menu or Channel Menu
-    // Next, check if navigate has already been set by the buttons (checked prior to this code running)
-    // If either joystick (5) or builtin button (6,7) have been pressed, it should take precedence over joystick movement
-    // If both conditions are met, check if the stick movements should navigate the menu.
-    // This will update the navigate variable with a number 0~4
-    if ((currentScreen == ELRS_MENU || currentScreen == CHANNEL_MENU) && navigate < 5 ) {
-        stickMenuNavigation();
-    }
+    // Global variable navigate will have been set by the getAnalogInputs or getDigitalInputs functions 
+    // If no movement was made, navigate will be zero. Otherwise, Up = 1, Down = 2, Left = 3, Right = 4.
+    // Joystick (5) or builtin button (6,7 for short/long press) take precedence over joystick movement
     if (navigate > 0) {  // Navigation has occurred
         // 0 = No move/button
         // 1 = Up
@@ -892,11 +848,9 @@ void statusDisplay(){
         
         switch (currentScreen) {
             case MAIN_PAGE:       
-                // 0 = ELRS not connected, 1 = Telemetry Active, 2 = BT Transmitter mode ELRS not connected, 3 = BT Transmitter mode ELRS connected, 4 = BT Joystick mode
+                // 0 = ELRS not connected, 1 = Telemetry Active, 4 = BT Joystick mode
                 connectionState = (crsfClass.telemetryActive) ? 1 : 0;
-                // connectionState += (btTransmitterActive) ? 2 : 0
                 // connectionState = (btJoystickModeActive) ? 4 : connectionState
-                // updateHomeScreen(batteryVoltage, connectionState, crsfClass.linkStats.uplinkLQ, rcChannels,CRSF_DIGITAL_CHANNEL_MIN,CRSF_DIGITAL_CHANNEL_MAX);
                 drawHomeScreen(batteryVoltage, connectionState, crsfClass.linkStats.uplinkLQ, currentValues,ADC_MIN,ADC_MAX);
                 break;
             case ELRS_STATS: 
@@ -1036,11 +990,8 @@ uint32_t maxOledTime = 0;
 uint32_t minOledTime = 999999;
 uint32_t cumOledTime = 0;
 uint32_t cntOledRuns = 0;
-// uint32_t totLoopTime = 0;
 uint32_t maxElrsTime = 0;
 uint32_t minElrsTime = 999999;
-// uint32_t totElrsTime = 0;
-// uint32_t elrsCounter = 0;
 uint32_t lastStatsPrintTime = 0;
 uint32_t totalTransmitFrames = 0;
 #endif
@@ -1051,6 +1002,7 @@ uint32_t lastSyncPrintTime = 0;
 // -----------------------------------------------------------------------------------------------------
 void loop()
 {
+    static uint32_t crsfTime = 0;
 #ifdef TIMINGDEBUG
     static uint32_t nextLogTimeUs = 0;
     uint32_t nowUs = micros();
@@ -1070,9 +1022,6 @@ void loop()
 
         // Read AUX channels and buttons
         getDigitalInputs();
-
-        // Read Connected bluetooth device inputs
-        // getBluetoothInputs();
 
         // Check for quick settings change via arm toggle gesture
         checkGestureSetting(); 

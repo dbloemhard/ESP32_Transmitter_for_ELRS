@@ -11,10 +11,9 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
+ * <http://www.gnu.org/licenses/>.
  */
+ 
 #include "params.h"
 
 //#define USE_M7
@@ -24,9 +23,7 @@
  Simple TX CONFIG OPTIONS (comment out unneeded options)
  =======================================================================================================
  */
-#define AUX_LONG_PRESS 1000   // default 1s press for enabling/disabling aux 3 (can be changed in handset settings)
-
-// Define hard-coded gimbal reverse (uncomment to reverse that channel)
+// Define hard-coded gimbal reverse (uncomment to reverse that channel) - can also be configured in handset settings
 #define AILERON_REVERSE
 //#define ELEVATOR_REVERSE
 #define THROTTLE_REVERSE
@@ -43,6 +40,10 @@ const float WARNING_VOLTAGE = 3.7; // 1S Lipo 3.7v per cell
 const float BEEPING_VOLTAGE = 3.5; // 1S Lipo 3.5v per cell
 const float ON_USB = 1.0;          // On USB power / no battery
 
+#define AUX_LONG_PRESS 1000               // default 1s press for enabling/disabling aux 3 (can be changed in handset settings)
+const uint32_t longPressDuration = 1500;  // Used for long press of builtin button
+const uint32_t shortPressDuration = 100;  // Used for debounce of builtin/joystick buttons
+
 // Define Commond for start Up Setting
 // ~50% stick deflection
 #define RC_MIN_COMMAND 511
@@ -51,15 +52,6 @@ const float ON_USB = 1.0;          // On USB power / no battery
 // Define stick idle alarm time
 #define STICK_ALARM_TIME 300000 // 300s or 5 minutes
 
-// Default Settings
-#define SETTING_1_PktRate 5 // 500Hz (-105dB)
-#define SETTING_1_Power 5   // 500mW
-#define SETTING_1_Dynamic 1 // Dynamic power on
-
-#define SETTING_2_PktRate 3 // 250Hz (-108dB)
-#define SETTING_2_Power 3   // 100mW
-#define SETTING_2_Dynamic 0 // Dynamic power off
-
 // Define analog input limits. ESP32 supports 12-bit resolution (0 - 4095), but in reality only half of that is useable
 #define ADC_MIN 0
 #define ADC_MID 1023
@@ -67,7 +59,8 @@ const float ON_USB = 1.0;          // On USB power / no battery
 
 // Filter coefficient: Higher = smoother but more latency. 
 // A value of 2 (shifts by 2) means 25% new raw sample, 75% old history. 
-#define FILTER_SHIFT 2
+// Value of 3 shifts by 2^3 = 8 means 12.5% new, 87.5% old value
+#define FILTER_SHIFT 3
 
 enum ChannelOrder
 {
