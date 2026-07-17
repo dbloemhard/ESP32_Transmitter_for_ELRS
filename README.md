@@ -7,12 +7,23 @@ Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an
 
 I am rewriting it to run on an ESP32 C3. This has an OLED screen and is small enough to make my TinyTX project even smaller. I am reading telemetry from the ELRS module and implemented the full ELRS Lua script for configuring ELRS as well as the handset.
 
-# THIS IS A W.I.P.
-https://youtube.com/shorts/-rPwNI36CTY?feature=share
+# Features
+https://www.youtube.com/shorts/WRp26U7txlU
 
-The radio works, and i have flown around my room with it. ELRS transmitter telemetry is working, and the configuration menu is usable to change ELRS settings. Version 3 of the 3D print finally fits everything and can be screwed together using m1.2x6 whoop canopy screws. From here on in its mainly going to be code bug fixes, and maybe i'll come up with another 3d print design.
+While i would consider this still a WIP, the current version is working perfectly and from here on i will mostly be doing maintenance, and maybe some new features for the firmware. ESP32 builtin button cycles screens (home, ELRS stats, channel outputs, model finder), and long press initiates functions. From the home screen, long press starts gimbal calibration. From ELRS stats screen it opens the ELRS config menu. From the Channel outputs screen it opens the channel menu (radio settings). Within menus, the builtin button functions like a back button. The joystick button is "enter" to start editing, save, and execute commands. The right joystick navigates the menu, similar to the OSD menu in Betaflight.
 
-Currently outstanding code tasks:
+While in the main screen, the left joystick button toggles Arm (AUX1). The right joystick button toggles AUX2 (typically angle mode), and long press of the right joystick toggles AUX3 (typically turtle mode). 
+
+ELRS menu lets you configure everything the LUA script usually does on EdgeTX. Yes you can select 1000hz packet rate. It seems to do around 860 packets/s while in the menu, probably more when armed and the OLED updates are slowed.
+
+Channel menu lets you select ADC filtering, expo, channel reversing, limiting and the long press duration for AUX3.
+
+Model finder is a simple RSSI DBM readout with strength bar and LED flashing in relation to how strong RSSI is.
+
+Note that screen updates are slowed to 2hz while armed, because sending data to the OLED takes a long time! More than 2 frame packets (4ms) at 500hz packet rate... Normally i am sending at 10hz, so this eats up 20 frames of data. Worth keeping in mind anyway.
+Version 3 of the 3D print finally fits everything and can be screwed together using m1.2x6 whoop canopy screws. 
+
+Currently outstanding code tasks (wishlist):
 * Bluetooth joystick using ESP32-BLE-Gamepad library (RX as a TX does not suport BLE Joystick so need to implement it myself)
 * Multitask the OLED updates to free up more time for the ELRS code
 * ~~Bluetooth transmitter?? Connect bluetooth joysticks to this device and forward controls to the ELRS transmitter~~ Unfortunately most game controllers use full bluetooth which is only supported on the original ESP32, not the C3
@@ -21,7 +32,8 @@ Programmed in Arduino IDE with love and a some AI suggestions (found myself rewr
 1. Install the ESP32 Boards via board manager
 2. then select ESP32C3 Dev Module board
 3. USB CDC On Boot "Enabled"
-4. Build and upload.
+4. You may need to load some libraries such as U8G2
+5. Build and upload.
 
 # Features:
 - Fits in your pocket. Not like the Radio Master Pocket which will get you funny looks... Actually pocketable.
