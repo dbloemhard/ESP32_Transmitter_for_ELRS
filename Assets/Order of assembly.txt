@@ -1,0 +1,17 @@
+NanoTX assembly:
+-------------------
+a. First flash your ELRS receiver to be a transmitter. 
+Connect it up to a flight controller, or USB-TTL
+Go to https://expresslrs.github.io/web-flasher/ and select Receiver.
+Follow normal instructions, most this size will be the Betafpv Nano 2.4Ghz FW
+On the Options screen, select Advanced and select "Flash RX as a TX (full duplex internal module only)
+Follow other flashing options as normal.
+b. Next flash the ESP32 with my firmware. This is coded in Arduino studio so you will need that, as well as the ESP32 library, U8G2 library.
+c. Solder the parts together.
+--------------------
+1. Mock up gimbal distances to know how long to trim the wires before attaching to the ESP32
+2. Ditto for the ELRS receiver and 5v regulator
+3. ELRS receiver (TX Module) is double-sided taped to the back shell of the housing
+4. ELRS antenna is fed through the hole at the top and attached to the receiver (TX Module). It should make a little loop to have some slack.
+5. 5V regulator (Shrink wrapped) goes next. It is sandwiched between the receiver and ESP32 - doesn't need tape
+6. ESP32 should sit on top of the print without too much pressure needed to push it against the shelves it will sit on. Wires should be tucked in the gap under the ESP32 - the joystick caps will come within 0.5mm of the ESP32 so it is important that all wires are within the bounds of the ESP32 PCB
