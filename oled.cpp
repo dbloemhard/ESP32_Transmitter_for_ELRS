@@ -65,7 +65,7 @@ void nextScreen() {
 
 
 void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
-    static int lastVoltageX10 = 0;
+    static int lastVoltageX10 = -99;
     static int lastTelemetryState = -1;
     static int lastBars = 0;
     static int16_t lastAux1 = -1;
@@ -168,11 +168,11 @@ void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t
     display.drawFrame(rightBoxX + OLED_X_OFFSET, boxesY + OLED_Y_OFFSET, boxSize, boxSize);
     
     // Map channel widths (Assuming 1000 to 2000us)
-    uint8_t leftX = map(channels[3], minChannelValue, maxChannelValue, leftBoxX + 1, leftBoxX + boxSize - 2); // Rudder
-    uint8_t leftY = map(channels[2], minChannelValue, maxChannelValue, boxesY + boxSize - 2, boxesY + 1);      // Throttle (Inverted Y)
+    uint8_t leftX = map(channels[0], minChannelValue, maxChannelValue, leftBoxX + 1, leftBoxX + boxSize - 2); // Rudder
+    uint8_t leftY = map(channels[1], minChannelValue, maxChannelValue, boxesY + boxSize - 2, boxesY + 1);      // Throttle (Inverted Y)
     
-    uint8_t rightX = map(channels[0], minChannelValue, maxChannelValue, rightBoxX + 1, rightBoxX + boxSize - 2); // Aileron
-    uint8_t rightY = map(channels[1], minChannelValue, maxChannelValue, boxesY + boxSize - 2, boxesY + 1);       // Elevator (Inverted Y)
+    uint8_t rightX = map(channels[2], minChannelValue, maxChannelValue, rightBoxX + 1, rightBoxX + boxSize - 2); // Aileron
+    uint8_t rightY = map(channels[3], minChannelValue, maxChannelValue, boxesY + boxSize - 2, boxesY + 1);       // Elevator (Inverted Y)
     
     // Render crosshairs as small indicator boxes
     display.drawBox(leftX - 1 + OLED_X_OFFSET, leftY - 1 + OLED_Y_OFFSET, 2, 2);
@@ -807,6 +807,80 @@ int navigateMenu(ParamCollection &menu, uint8_t direction) {
     }
 
     return returnVal;
+}
+
+
+void handleNavigation(int navigate, Handset& handset, ELRS& elrs, bool& startCalibration ) {
+    // 0 = No move/button
+    // 1 = Up
+    // 2 = Down
+    // 3 = Left
+    // 4 = Right
+    // 5 = Joystick button
+    // 6 = Built in button (short press)
+    // 7 = Built in button (long press)
+    if (navigate ==0) return;
+
+    if (navigate == 7) {
+        switch (currentScreen) {
+            case MAIN_PAGE:
+                startCalibration = true;
+                break;
+            case ELRS_STATS:
+                currentScreen = ELRS_MENU;
+                break;
+            case CHANNEL_OUTPUTS: 
+                currentScreen = CHANNEL_MENU;
+                break;
+            case BT_JOYSTICK: 
+                //startBtJoystick();
+                //currentScreen = MAIN_PAGE;
+                break;
+            // Ignore long press builtin button in ELRS_MENU & CHANNEL_MENU & MODEL_FINDER
+        }
+    } else {
+        if (currentScreen == ELRS_MENU) {
+            int result = navigateMenu(elrs.txModule.params, navigate);
+            switch (result) {
+                case -1: // Back
+                    if (elrs.popup()) {
+                        elrs.cancelCommand();
+                    } 
+                    else {
+                        currentScreen = ELRS_STATS;  // Exit out of menu
+                    }
+                    break;
+                case 1: // Save
+                    elrs.editParamSave();
+                    break;
+                case 2:  // Execute Command
+                    elrs.executeCommand();
+                    break;
+                default: // Nothing to do
+                    break;
+            }
+        } else if (currentScreen == CHANNEL_MENU) {
+            int result = navigateMenu(handset.handsetSettingsMenu, navigate);
+            switch (result) {
+                case -1:
+                    // Not using popups in channel menu, so no need to check if popupActive()
+                    currentScreen = CHANNEL_OUTPUTS;  // Exit out of menu
+                    break;
+                case 1:
+                    handset.saveGlobalSettings();
+                    break;
+                case 2:  // Execute Command
+                    handset.executeSettingsCommand();
+                    break;                        
+                default: // Nothing to do
+                    break;
+            }
+        } else {
+            if (navigate == 6) {
+                nextScreen();  // Cycle screens when not in a menu
+            }
+        }
+    }   
 }
 
 

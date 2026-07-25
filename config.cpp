@@ -18,17 +18,17 @@
 #include <vector>
 #include "config.h"
 
-HandsetSettings globalSettings;
-ParamCollection handsetSettingsMenu;
+//HandsetSettings globalSettings;
+//ParamCollection handsetSettingsMenu;
 static Preferences configPrefs; // Using a static local instance to avoid global namespace pollution
 
-void loadGlobalSettings(bool initialize) {
+void Handset::loadGlobalSettings(bool initialize) {
     // Empty the menu
     if (initialize) {handsetSettingsMenu.clearParams();}
     int idx = 0; 
 
     // Menu Header goes into Index 0, assume this will return ok
-    addInfo(idx, idx, "Channel Menu", "");
+    addInfo(idx, idx, "Radio Settings", "");
     idx++;
 
     // Open the "settings" namespace in Read-Only mode (true)
@@ -49,6 +49,10 @@ void loadGlobalSettings(bool initialize) {
 
     globalSettings.auxLongPress = configPrefs.getUShort("Long Press", AUX_LONG_PRESS); // Default 1000ms long press
     addNumericParam(idx, 0, CRSF_UINT16,"Long Press", globalSettings.auxLongPress, 300, 5000, 100, "ms");
+    idx++;
+
+    globalSettings.voltageScale = configPrefs.getUShort("Volt Scale", VOLTAGE_SCALE); // Default to hardcoded voltagescale (454)
+    addNumericParam(idx, 0, CRSF_UINT16,"Volt Scale", globalSettings.voltageScale, 100, 2000, 5, "");
     idx++;
 
     // Load channel arrays dynamically using an index suffix string
@@ -96,7 +100,7 @@ void loadGlobalSettings(bool initialize) {
     configPrefs.end();
 }
 
-void saveGlobalSettings() {
+void Handset::saveGlobalSettings() {
     // Open the "settings" namespace in Read-Write mode (false)
     configPrefs.begin("settings", false);
 
@@ -119,7 +123,7 @@ void saveGlobalSettings() {
     configPrefs.end();
 }
 
-void executeSettingsCommand() {
+void Handset::executeSettingsCommand() {
     // Do something with the current command??
     switch (handsetSettingsMenu.selectedParam) {
         case 99:
@@ -128,7 +132,11 @@ void executeSettingsCommand() {
     }
 }
 
-bool addFolder(int idx, int parent, const char* label) {
+void Handset::cancelSettingsCommand() {
+    // Do something with the current command??
+}
+
+bool Handset::addFolder(int idx, int parent, const char* label) {
     if (handsetSettingsMenu.getParamSlot(idx) != -1) {
         handsetSettingsMenu[idx].parentFolder = parent;
         handsetSettingsMenu[idx].type = CRSF_FOLDER;
@@ -138,7 +146,7 @@ bool addFolder(int idx, int parent, const char* label) {
     else return false;
 }
 
-bool addInfo(int idx, int parent, const char* label, const char* valueString) {
+bool Handset::addInfo(int idx, int parent, const char* label, const char* valueString) {
     if (handsetSettingsMenu.getParamSlot(idx) != -1) {
         handsetSettingsMenu[idx].parentFolder = parent;
         handsetSettingsMenu[idx].type = CRSF_INFO;
@@ -149,7 +157,7 @@ bool addInfo(int idx, int parent, const char* label, const char* valueString) {
     else return false;
 }
 
-bool addChoiceParam(int idx, int parent, const char* label, const std::vector<const char*>& choices, int currVal, int min, int max) {
+bool Handset::addChoiceParam(int idx, int parent, const char* label, const std::vector<const char*>& choices, int currVal, int min, int max) {
     if (handsetSettingsMenu.getParamSlot(idx) != -1) {
         handsetSettingsMenu[idx].parentFolder = parent;
         handsetSettingsMenu[idx].type = CRSF_TEXT_SELECTION;
@@ -167,7 +175,7 @@ bool addChoiceParam(int idx, int parent, const char* label, const std::vector<co
     else return false;
 }
 
-bool addNumericParam(int idx, int parent, crsfValueType type, const char* label, int currVal, int min, int max, int step, const char* units) {
+bool Handset::addNumericParam(int idx, int parent, crsfValueType type, const char* label, int currVal, int min, int max, int step, const char* units) {
     if (handsetSettingsMenu.getParamSlot(idx) != -1) {
         handsetSettingsMenu[idx].parentFolder = parent;
         handsetSettingsMenu[idx].type = type;

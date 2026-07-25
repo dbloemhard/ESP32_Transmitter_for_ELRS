@@ -30,17 +30,11 @@
 //#define DEBUG // if not commented out, Serial.print() is active! For debugging only!!
 //#define TIMINGDEBUG  // When this is active Serial port will print out timing details
 
+//----- Handset class contains settings and menu ------
+Handset transmitter;
+
 //----- global variables for inputs -------------------
-struct InputValues {
-    int32_t leftX;
-    int32_t leftY;
-    int32_t rightX;
-    int32_t rightY;
-    int16_t AUX1;
-    int16_t AUX2;
-    int16_t AUX3;
-};
-InputValues stickValues;
+int16_t stickValues[7];  // 4 axis of joysticks + 3 aux inputs
 
 struct ADCValues {
     int32_t leftX;
@@ -338,7 +332,13 @@ bool calibrationRun() {
 void getAnalogInputs() {
     // Read Voltage
     rawValues.voltage = analogRead(ANALOG_PIN_VOLTAGE);
-    batteryVoltage = (float)rawValues.voltage / VOLTAGE_SCALE;
+    if (transmitter.globalSettings.voltageScale > 0) { // Prevent divide by zero possibility
+        batteryVoltage = (float)rawValues.voltage / transmitter.globalSettings.voltageScale;
+    }
+    else {
+        batteryVoltage = (float)rawValues.voltage / VOLTAGE_SCALE;
+    }
+
 
     // 1. Read raw 12-bit ADC values (0 - 4095)
     int32_t currentRightX = analogRead(STICK_RIGHT_X);
@@ -353,23 +353,23 @@ void getAnalogInputs() {
     rawValues.leftX  = lowLatencyFilter(currentLeftX,  &filteredRaw.leftX);
     
     // 3. Apply calibration mappings
-    stickValues.rightX = calibrate(rawValues.rightX, calValues.rightXMin, calValues.rightXMid, calValues.rightXMax);
-    stickValues.rightY = calibrate(rawValues.rightY, calValues.rightYMin, calValues.rightYMid, calValues.rightYMax);
-    stickValues.leftY  = calibrate(rawValues.leftY,  calValues.leftYMin, calValues.leftYMid, calValues.leftYMax);
-    stickValues.leftX  = calibrate(rawValues.leftX,  calValues.leftXMin, calValues.leftXMid, calValues.leftXMax);
+    stickValues[RIGHTX] = calibrate(rawValues.rightX, calValues.rightXMin, calValues.rightXMid, calValues.rightXMax);
+    stickValues[RIGHTY] = calibrate(rawValues.rightY, calValues.rightYMin, calValues.rightYMid, calValues.rightYMax);
+    stickValues[LEFTY]  = calibrate(rawValues.leftY,  calValues.leftYMin, calValues.leftYMid, calValues.leftYMax);
+    stickValues[LEFTX]  = calibrate(rawValues.leftX,  calValues.leftXMin, calValues.leftXMid, calValues.leftXMax);
 
     // 4. Hard-coded reverse (Gimbal configuration)
-    #ifdef AILERON_REVERSE
-        stickValues.rightX  = ADC_MAX-stickValues.rightX;
+    #ifdef RIGHTX_REVERSE
+        stickValues[RIGHTX]  = ADC_MAX-stickValues[RIGHTX];
     #endif
-    #ifdef ELEVATOR_REVERSE
-        stickValues.rightY = ADC_MAX-stickValues.rightY;
+    #ifdef RIGHTY_REVERSE
+        stickValues[RIGHTY] = ADC_MAX-stickValues[RIGHTY];
     #endif
-    #ifdef THROTTLE_REVERSE
-        stickValues.leftY = ADC_MAX-stickValues.leftY;
+    #ifdef LEFTX_REVERSE
+        stickValues[LEFTX]   = ADC_MAX-stickValues[LEFTX];
     #endif
-    #ifdef RUDDER_REVERSE
-        stickValues.leftX   = ADC_MAX-stickValues.leftX;
+    #ifdef LEFTY_REVERSE
+        stickValues[LEFTY] = ADC_MAX-stickValues[LEFTY];
     #endif
 
     // 5. Check if the current movement qualifies for menu navigation
@@ -394,15 +394,15 @@ void stickMenuNavigation() {
     navigate = 0; // Reset navigate variable at the start of each loop
 
     // Check if joystick is currently physically in the center zone
-    bool stickCentered = (stickValues.rightY > RC_MIN_COMMAND && stickValues.rightY < RC_MAX_COMMAND &&
-                               stickValues.rightX  > RC_MIN_COMMAND && stickValues.rightX  < RC_MAX_COMMAND);
+    bool stickCentered = (stickValues[RIGHTY] > RC_MIN_COMMAND && stickValues[RIGHTY] < RC_MAX_COMMAND &&
+                               stickValues[RIGHTX]  > RC_MIN_COMMAND && stickValues[RIGHTX]  < RC_MAX_COMMAND);
 
     // Handle Center Debouncing
     if (stickCentered) {
         deflectionStartTime = 0; // Reset deflection timer
         if (centerStartTime == 0) {
             centerStartTime = currentMillis; // Start center debounce timer
-        } else if (currentMillis - centerStartTime >= shortPressDuration) {
+        } else if (currentMillis - centerStartTime >= BTN_SHORT_PRESS) {
             isCentered = true;   // Joystick is officially centered
             hasNavigated = false; // Reset navigation lock for the next movement
         }
@@ -413,10 +413,10 @@ void stickMenuNavigation() {
         
         // Determine current physical direction of deflection
         uint8_t currentDirection = 0;
-        if (stickValues.rightY >= RC_MAX_COMMAND)       currentDirection = 1; // Up
-        else if (stickValues.rightY <= RC_MIN_COMMAND)  currentDirection = 2; // Down
-        else if (stickValues.rightX <= RC_MIN_COMMAND)  currentDirection = 3; // Left
-        else if (stickValues.rightX >= RC_MAX_COMMAND)  currentDirection = 4; // Right
+        if (stickValues[RIGHTY] >= RC_MAX_COMMAND)       currentDirection = 1; // Up
+        else if (stickValues[RIGHTY] <= RC_MIN_COMMAND)  currentDirection = 2; // Down
+        else if (stickValues[RIGHTX] <= RC_MIN_COMMAND)  currentDirection = 3; // Left
+        else if (stickValues[RIGHTX] >= RC_MAX_COMMAND)  currentDirection = 4; // Right
 
         // If the direction changed mid-deflection, reset the deflection timer
         if (currentDirection != pendingDirection) {
@@ -424,7 +424,7 @@ void stickMenuNavigation() {
             pendingDirection = currentDirection;
         } 
         // If held in the same direction for long enough, check if we can navigate
-        else if (currentMillis - deflectionStartTime >= shortPressDuration) {
+        else if (currentMillis - deflectionStartTime >= BTN_SHORT_PRESS) {
             if (isCentered && !hasNavigated) {
                 navigate = pendingDirection; // Trigger the menu action
                 hasNavigated = true;         // Lock execution until center return
@@ -436,7 +436,7 @@ void stickMenuNavigation() {
 
 // ADC Filtering, since ESP32 ADCs are supposed to be noisy
 inline int32_t lowLatencyFilter(int32_t currentRaw, int32_t *previousFiltered) {
-    if (globalSettings.adcFilter && *previousFiltered > 0) {
+    if (transmitter.globalSettings.adcFilter && *previousFiltered > 0) {
         // IIR Filter implementation using fast integer bit-shifting:
         // NewFiltered = PreviousFiltered + ((CurrentRaw - PreviousFiltered) >> FILTER_SHIFT)
         *previousFiltered = *previousFiltered + ((currentRaw - *previousFiltered) >> FILTER_SHIFT);
@@ -482,10 +482,10 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
     if (adcValue > ADC_MAX) adcValue = ADC_MAX;
 
     int32_t crsfOutput = CRSF_DIGITAL_CHANNEL_MAX - CRSF_DIGITAL_CHANNEL_MIN >> 1; // Default to center value
-    uint8_t expo = globalSettings.expo[chIndex];
-    uint8_t limit = globalSettings.limit[chIndex];
+    uint8_t expo = transmitter.globalSettings.expo[chIndex];
+    uint8_t limit = transmitter.globalSettings.limit[chIndex];
 
-    if (chIndex == THROTTLE && !globalSettings.throttleCentered) {
+    if (chIndex == THROTTLE && !transmitter.globalSettings.throttleCentered) {
         // Throttle-specific Expo (Curved from 0)
         adcValue = applyThrottleExpo(adcValue, expo);
 
@@ -493,7 +493,7 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
         adcValue = (adcValue * limit) / 100;
 
         // User-configured reverse
-        if (globalSettings.reverse[chIndex]) {
+        if (transmitter.globalSettings.reverse[chIndex]) {
             adcValue = 2047 - adcValue;
         }
 
@@ -505,15 +505,15 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
         int32_t stickCentered = adcValue - ADC_MID;
 
         // Apply Dynamic Deadband
-        if (globalSettings.deadband > 0) {
-            if (abs(stickCentered) <= globalSettings.deadband) {
+        if (transmitter.globalSettings.deadband > 0) {
+            if (abs(stickCentered) <= transmitter.globalSettings.deadband) {
                 stickCentered = 0;
             } else {
                 // Interpolate the stick curve outward past the deadband edge
                 if (stickCentered > 0) {
-                    stickCentered = ((stickCentered - globalSettings.deadband) * 1024) / (1024 - globalSettings.deadband);
+                    stickCentered = ((stickCentered - transmitter.globalSettings.deadband) * 1024) / (1024 - transmitter.globalSettings.deadband);
                 } else {
-                    stickCentered = ((stickCentered + globalSettings.deadband) * 1024) / (1024 - globalSettings.deadband);
+                    stickCentered = ((stickCentered + transmitter.globalSettings.deadband) * 1024) / (1024 - transmitter.globalSettings.deadband);
                 }
             }
         }
@@ -525,7 +525,7 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
         stickCentered = (stickCentered * limit) / 100;
 
         // User-configured reverse
-        if (globalSettings.reverse[chIndex]) {
+        if (transmitter.globalSettings.reverse[chIndex]) {
             stickCentered = -stickCentered;
         }
 
@@ -543,39 +543,39 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
 
 // Map stick values into traditional standard CRSF channel microsecond positions (1000us to 2000us)
 void mapChannels() {
-    int mode = globalSettings.channelMode;
+    int mode = transmitter.globalSettings.channelMode;
     if (mode < 1 || mode > 4) mode = 2; // Default to Mode 2
 
     switch (mode) {
         case 1:
-            rcChannels[AILERON]   = processStick(stickValues.rightX, 0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues.leftY,  1);
-            rcChannels[THROTTLE]  = processStick(stickValues.rightY, 2);
-            rcChannels[RUDDER]    = processStick(stickValues.leftX,  3); 
+            rcChannels[AILERON]   = processStick(stickValues[RIGHTX], 0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues[LEFTY],  1);
+            rcChannels[THROTTLE]  = processStick(stickValues[RIGHTY], 2);
+            rcChannels[RUDDER]    = processStick(stickValues[LEFTX],  3); 
             break;
         case 2:
-            rcChannels[AILERON]   = processStick(stickValues.rightX, 0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues.rightY, 1);
-            rcChannels[THROTTLE]  = processStick(stickValues.leftY,  2);
-            rcChannels[RUDDER]    = processStick(stickValues.leftX,  3); 
+            rcChannels[AILERON]   = processStick(stickValues[RIGHTX], 0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues[RIGHTY], 1);
+            rcChannels[THROTTLE]  = processStick(stickValues[LEFTY],  2);
+            rcChannels[RUDDER]    = processStick(stickValues[LEFTX],  3); 
             break;
         case 3:
-            rcChannels[AILERON]   = processStick(stickValues.leftX,  0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues.leftY,  1);
-            rcChannels[THROTTLE]  = processStick(stickValues.rightY, 2);
-            rcChannels[RUDDER]    = processStick(stickValues.rightX, 3); 
+            rcChannels[AILERON]   = processStick(stickValues[LEFTX],  0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues[LEFTY],  1);
+            rcChannels[THROTTLE]  = processStick(stickValues[RIGHTY], 2);
+            rcChannels[RUDDER]    = processStick(stickValues[RIGHTX], 3); 
             break;
         case 4:
-            rcChannels[AILERON]   = processStick(stickValues.leftX,  0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues.rightY, 1);
-            rcChannels[THROTTLE]  = processStick(stickValues.leftY,  2);
-            rcChannels[RUDDER]    = processStick(stickValues.rightX, 3); 
+            rcChannels[AILERON]   = processStick(stickValues[LEFTX],  0); 
+            rcChannels[ELEVATOR]  = processStick(stickValues[RIGHTY], 1);
+            rcChannels[THROTTLE]  = processStick(stickValues[LEFTY],  2);
+            rcChannels[RUDDER]    = processStick(stickValues[RIGHTX], 3); 
             break;
     }
 
-    rcChannels[AUX1] = (stickValues.AUX1 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
-    rcChannels[AUX2] = (stickValues.AUX2 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
-    rcChannels[AUX3] = (stickValues.AUX3 == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;    
+    rcChannels[AUX1] = (stickValues[SW1] == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
+    rcChannels[AUX2] = (stickValues[SW2] == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;
+    rcChannels[AUX3] = (stickValues[SW3] == 1) ? CRSF_DIGITAL_CHANNEL_MAX : CRSF_DIGITAL_CHANNEL_MIN;    
 }
 
 
@@ -593,11 +593,11 @@ void getDigitalInputs(){
         if (buttonPressedTime> 0) {  // pressStartTime is non-zero
             unsigned long pressDuration = millis() - buttonPressedTime;
             buttonPressedTime = 0;
-            if (pressDuration >= longPressDuration) { // LongPress Duration for this is separate and hard-coded to 2s
+            if (pressDuration >= BTN_LONG_PRESS) { // LongPress Duration for this is separate and hard-coded to 2s
                 navigate = 7;
                 // Set flag to start calibration
                 // calibrationRequested = true;
-            } else if (pressDuration >= shortPressDuration) {
+            } else if (pressDuration >= BTN_SHORT_PRESS) {
                 navigate = 6; // Built in button pressed
                 //nextScreen();
             }
@@ -613,16 +613,16 @@ void getDigitalInputs(){
         if (aux1PressedTime> 0) {  // pressStartTime is non-zero
             unsigned long pressDuration = millis() - aux1PressedTime;
             aux1PressedTime = 0;
-            if (pressDuration >= globalSettings.auxLongPress) {
+            if (pressDuration >= transmitter.globalSettings.auxLongPress) {
                 if (!ARMED) {
                     // Not armed, long press - initiate menu? TBD
                     // this also protects against accidental presses - just hold longer to 'cancel'
                 }
-            } else if (pressDuration >= shortPressDuration) {
-                stickValues.AUX1 = !stickValues.AUX1; // Toggle AUX1
+            } else if (pressDuration >= BTN_SHORT_PRESS) {
+                stickValues[SW1] = !stickValues[SW1]; // Toggle AUX1
 
                 // Global ARMED indicator
-                ARMED = stickValues.AUX1;
+                ARMED = stickValues[SW1];
             }
         }
     }
@@ -636,13 +636,13 @@ void getDigitalInputs(){
         if (aux2PressedTime> 0) {  // pressStartTime is non-zero
             unsigned long pressDuration = millis() - aux2PressedTime;
             aux2PressedTime = 0;
-            if (pressDuration >= globalSettings.auxLongPress) {
+            if (pressDuration >= transmitter.globalSettings.auxLongPress) {
                 //if (!ARMED) {
                    // Not armed, long press - initiate menu? TBD
                 //}
-                stickValues.AUX3 = !stickValues.AUX3; // Toggle AUX3
-            } else if (pressDuration >= shortPressDuration) {
-                stickValues.AUX2 = !stickValues.AUX2; // Toggle AUX2
+                stickValues[SW3] = !stickValues[SW3]; // Toggle AUX3
+            } else if (pressDuration >= BTN_SHORT_PRESS) {
+                stickValues[SW2] = !stickValues[SW2]; // Toggle AUX2
                 navigate = 5; // Joystick button pressed
             }
         }
@@ -653,7 +653,7 @@ void getDigitalInputs(){
 // Startup stick commands
 // -----------------------------------------------------------------------------------------------------
 void checkGestureSetting() {
-    bool currentArmState = stickValues.AUX1; 
+    bool currentArmState = stickValues[SW1]; 
     static bool lastArmState = false;        // Tracks previous arm switch position
     static uint32_t armTimer = 0;            // Records when the switch was turned on
     static bool gestureTriggerReady = false; // Arming arm-switch trigger sequence flag
@@ -767,74 +767,7 @@ void statusDisplay(){
     // If no movement was made, navigate will be zero. Otherwise, Up = 1, Down = 2, Left = 3, Right = 4.
     // Joystick (5) or builtin button (6,7 for short/long press) take precedence over joystick movement
     if (navigate > 0) {  // Navigation has occurred
-        // 0 = No move/button
-        // 1 = Up
-        // 2 = Down
-        // 3 = Left
-        // 4 = Right
-        // 5 = Joystick button
-        // 6 = Built in button (short press)
-        // 7 = Built in button (long press)
-        if (navigate == 7) {
-            switch (currentScreen) {
-                case MAIN_PAGE:
-                    calibrationRequested = true;
-                    break;
-                case ELRS_STATS:
-                    currentScreen = ELRS_MENU;
-                    break;
-                case CHANNEL_OUTPUTS: 
-                    currentScreen = CHANNEL_MENU;
-                    break;
-                case BT_JOYSTICK: 
-                    //startBtJoystick();
-                    //currentScreen = MAIN_PAGE;
-                    break;
-                // Ignore long press builtin button in ELRS_MENU & CHANNEL_MENU & MODEL_FINDER
-            }
-        } else {
-            if (currentScreen == ELRS_MENU) {
-                int result = navigateMenu(elrsClass.txModule.params, navigate);
-                switch (result) {
-                    case -1: // Back
-                        if (elrsClass.popup()) {
-                            elrsClass.cancelCommand();
-                        } 
-                        else {
-                            currentScreen = ELRS_STATS;  // Exit out of menu
-                        }
-                        break;
-                    case 1: // Save
-                        elrsClass.editParamSave();
-                        break;
-                    case 2:  // Execute Command
-                        elrsClass.executeCommand();
-                        break;
-                    default: // Nothing to do
-                        break;
-                }
-            } else if (currentScreen == CHANNEL_MENU) {
-                int result = navigateMenu(handsetSettingsMenu, navigate);
-                switch (result) {
-                    case -1:
-                        // Not using popups in channel menu, so no need to check if popupActive()
-                        currentScreen = CHANNEL_OUTPUTS;  // Exit out of menu
-                        break;
-                    case 1:
-                        saveGlobalSettings();
-                        break;
-                    case 2:  // Execute Command
-                        executeSettingsCommand();
-                        break;                        
-                    default: // Nothing to do
-                        break;
-                }
-            } else {
-                if (navigate == 6) {
-                    nextScreen();  // Cycle screens when not in a menu
-                }
-            }
-        } 
+        handleNavigation(navigate, transmitter, elrsClass, calibrationRequested);
         navigate = 0; // Reset navigation
     }
 
@@ -844,14 +777,13 @@ void statusDisplay(){
     uint16_t screenUpdateTime = (ARMED)? 500 : 100; // 2hz while armed, 10hz while disarmed
     if (currentTime - lastScreenUpdateTime >= screenUpdateTime) { 
         lastScreenUpdateTime = currentTime;
-        int16_t currentValues[] = {stickValues.rightX,stickValues.rightY,stickValues.leftY,stickValues.leftX,stickValues.AUX1,stickValues.AUX2,stickValues.AUX3};
         
         switch (currentScreen) {
             case MAIN_PAGE:       
                 // 0 = ELRS not connected, 1 = Telemetry Active, 4 = BT Joystick mode
                 connectionState = (crsfClass.telemetryActive) ? 1 : 0;
                 // connectionState = (btJoystickModeActive) ? 4 : connectionState
-                drawHomeScreen(batteryVoltage, connectionState, crsfClass.linkStats.uplinkLQ, currentValues,ADC_MIN,ADC_MAX);
+                drawHomeScreen(batteryVoltage, connectionState, crsfClass.linkStats.uplinkLQ, stickValues,ADC_MIN,ADC_MAX);
                 break;
             case ELRS_STATS: 
                 drawElrsStatsScreen(elrsClass);
@@ -863,7 +795,7 @@ void statusDisplay(){
                 drawChannelOutputsScreen(rcChannels,CRSF_DIGITAL_CHANNEL_MIN,CRSF_DIGITAL_CHANNEL_MAX);
                 break;
             case CHANNEL_MENU: 
-                drawMenuScreen(handsetSettingsMenu);
+                drawMenuScreen(transmitter.handsetSettingsMenu);
                 break; 
             // case BT_JOYSTICK: 
             //     drawBtJoystickScreen();
@@ -903,9 +835,9 @@ void logData(){
         sprintf(buf, "%5d", rcChannels[RUDDER]);
         Serial.print(buf);
         Serial.print(" AUX: ");
-        Serial.print(stickValues.AUX1);
-        Serial.print(stickValues.AUX2);
-        Serial.print(stickValues.AUX3);
+        Serial.print(stickValues[SW1]);
+        Serial.print(stickValues[SW2]);
+        Serial.print(stickValues[SW3]);
         if (ARMED) Serial.print("(ARMED)");
         Serial.print("  "); 
         if (crsfClass.moduleConnected){
@@ -959,7 +891,7 @@ void setup()
     pinMode(DIGITAL_PIN_BUTTON, INPUT_PULLUP);
     
     calibrationLoad();
-    loadGlobalSettings(true);
+    transmitter.loadGlobalSettings(true);
     
     // passive buzzer, no startup tone
     // digitalWrite(DIGITAL_PIN_BUZZER, HIGH); //BUZZER OFF

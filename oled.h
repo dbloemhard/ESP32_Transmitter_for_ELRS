@@ -18,6 +18,7 @@
  */
 #include <Wire.h>
 #include "elrs.h"
+#include "config.h"
 #include "params.h"
 #include <U8g2lib.h>
 
@@ -56,6 +57,7 @@ void animateEditValue(const ParamCollection& menu);
 void drawScrollingPopupText(const char* text, int textX, int textY, int displayAreaWidth);
 void drawPopup(const ParamCollection& menu);
 int  navigateMenu(ParamCollection &menu, uint8_t direction);
+void handleNavigation(int navigate, Handset& handset, ELRS& elrs, bool& startCalibration );
 void drawModelFinderScreen(int raw, int avg, int strength);
 
 void drawMessage(char title[], char line1[], char line2[]);

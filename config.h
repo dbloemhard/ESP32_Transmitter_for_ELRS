@@ -24,10 +24,10 @@
  =======================================================================================================
  */
 // Define hard-coded gimbal reverse (uncomment to reverse that channel) - can also be configured in handset settings
-#define AILERON_REVERSE
-//#define ELEVATOR_REVERSE
-#define THROTTLE_REVERSE
-//#define RUDDER_REVERSE
+#define RIGHTX_REVERSE
+//#define RIGHTY_REVERSE
+//#define LEFTX_REVERSE
+#define LEFTY_REVERSE
 
 // Active buzzer only plays one tone (often used on Flight controllers as a beeper)
 // Can also use a vibrator motor
@@ -35,14 +35,14 @@
 
 //----- Voltage monitoring -------------------------
 // Define battery warning voltage
-const float VOLTAGE_SCALE = 454.5;
-const float WARNING_VOLTAGE = 3.7; // 1S Lipo 3.7v per cell
-const float BEEPING_VOLTAGE = 3.5; // 1S Lipo 3.5v per cell
-const float ON_USB = 1.0;          // On USB power / no battery
+#define VOLTAGE_SCALE 454
+#define WARNING_VOLTAGE 3.7 // 1S Lipo 3.7v per cell
+#define BEEPING_VOLTAGE 3.5 // 1S Lipo 3.5v per cell
+#define ON_USB          1.0 // On USB power / no battery
 
-#define AUX_LONG_PRESS 1000               // default 1s press for enabling/disabling aux 3 (can be changed in handset settings)
-const uint32_t longPressDuration = 1500;  // Used for long press of builtin button
-const uint32_t shortPressDuration = 100;  // Used for debounce of builtin/joystick buttons
+#define AUX_LONG_PRESS  1000  // default 1s press for enabling/disabling aux 3 (can be changed in handset settings)
+#define BTN_LONG_PRESS  1500  // Used for long press of builtin button (hardcoded)
+#define BTN_SHORT_PRESS 100   // Used for debounce of builtin/joystick buttons (hardcoded)
 
 // Define Commond for start Up Setting
 // ~50% stick deflection
@@ -62,8 +62,7 @@ const uint32_t shortPressDuration = 100;  // Used for debounce of builtin/joysti
 // Value of 3 shifts by 2^3 = 8 means 12.5% new, 87.5% old value
 #define FILTER_SHIFT 3
 
-enum ChannelOrder
-{
+enum ChannelOrder {
     AILERON,
     ELEVATOR,
     THROTTLE,
@@ -78,29 +77,45 @@ enum ChannelOrder
     AUX8, // (CH12)
 };
 
+enum stickInputs {
+    LEFTX,
+    LEFTY,
+    RIGHTX,
+    RIGHTY,
+    SW1,
+    SW2,
+    SW3,
+};
+
 struct HandsetSettings {
     uint8_t channelMode;
     bool adcFilter;
     uint16_t deadband;
     uint16_t auxLongPress;
+    uint16_t voltageScale;
     bool throttleCentered;
 
     bool reverse[4];  // True = reversed for A, E, T, R
     uint8_t limit[4]; // 0 to 100 (%) for A, E, T, R
     uint8_t expo[4];  // 0 to 100 (%) for A, E, T, R
 };
-extern HandsetSettings globalSettings;
-extern ParamCollection handsetSettingsMenu;
 
-void loadGlobalSettings(bool initialize); // pass in true to rebuild from scratch, false will update existing entries
-void saveGlobalSettings();  // Saves the currently selected global settings menu item with the current edit value
-void executeSettingsCommand(); // Executes the currently selected command, eg reset all settings. Not currently used.
-void populateSettingsMenu();
-bool addFolder(int idx, int parent, const char* label) ;
-bool addInfo(int idx, int parent, const char* label, const char* valueString);
-bool addChoiceParam(int idx, int parent, const char* label, const std::vector<const char*>& choices, int currVal, int min, int max);
-bool addNumericParam(int idx, int parent, crsfValueType type, const char* label, int currVal, int min, int max, int step, const char* units);
+class Handset {
+public:
+    HandsetSettings globalSettings;
+    ParamCollection handsetSettingsMenu;
 
+    void loadGlobalSettings(bool initialize); // pass in true to rebuild from scratch, false will update existing entries
+    void saveGlobalSettings();                // Saves the currently selected global settings menu item with the current edit value
+    void executeSettingsCommand();            // Executes the currently selected command, eg reset all settings. Not currently used.
+    void cancelSettingsCommand();             // Cancel the currently executing command. Not currently used.
+
+private:
+    bool addFolder(int idx, int parent, const char* label) ;
+    bool addInfo(int idx, int parent, const char* label, const char* valueString);
+    bool addChoiceParam(int idx, int parent, const char* label, const std::vector<const char*>& choices, int currVal, int min, int max);
+    bool addNumericParam(int idx, int parent, crsfValueType type, const char* label, int currVal, int min, int max, int step, const char* units);
+};
 // External Module responses;
 // [CRSF] -> Querying Menu Parameter Index: 1, chunk: 4
 // Received Packet type 0x2B
