@@ -22,12 +22,27 @@
 #include "params.h"
 #include <U8g2lib.h>
 
+// Two options for the OLED definition. 
+// The ESP32-C3 comes with different OLED screens depending on the seller. If your screen shows garbled or offset,
+// try OLED_OPTION_2 (add "//" at the start of the line for OLED_OPTION_1 and remove "//" from the start of OLED_OPTION_2). 
+// Alternatively, you can edit the offsets on their own 
+#define OLED_OPTION_1
+//#define OLED_OPTION_2
+
+#ifdef OLED_OPTION_1
 extern U8G2_SSD1306_72X40_ER_F_HW_I2C display;
  //----- OLED Screen setup  -------------------
+const int OLED_X_OFFSET = 0; // Standard alignment for 0.42" 72x40 on 128px space
+const int OLED_Y_OFFSET = 0; // Adjusted to shift the 40px matrix vertically if needed
+#endif
+#ifdef OLED_OPTION_2
+extern U8G2_SSD1306_128X64_NONAME_F_HW_I2C display;
+ //----- OLED Screen setup  -------------------
+const int OLED_X_OFFSET = 30; // Visible 72x40 area starts at X=30 in the 128x64 controller buffer
+const int OLED_Y_OFFSET = 12; // Visible 72x40 area starts at Y=12 in the 128x64 controller buffer
+#endif
 const int OLED_WIDTH = 72;
 const int OLED_HEIGHT = 40;
-const int OLED_X_OFFSET = 0; //28; // Standard alignment for 0.42" 72x40 on 128px space
-const int OLED_Y_OFFSET = 0; //12; // Adjusted to shift the 40px matrix vertically if needed
 
 enum displayState {MAIN_PAGE, ELRS_STATS, ELRS_MENU, CHANNEL_OUTPUTS, CHANNEL_MENU, BT_JOYSTICK, MODEL_FINDER, CALIBRATION};
 extern displayState currentScreen; 
