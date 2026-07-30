@@ -55,6 +55,7 @@ void drawBootLogo();
 void clearScreen();
 void nextScreen();
 
+static void updateLogicalDisplayArea(uint8_t logicalTileX, uint8_t logicalTileY, uint8_t logicalTileW, uint8_t logicalTileH);
 void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue);
 void drawElrsStatsScreen(const ELRS& elrs);
 void drawChannelOutputsScreen(int16_t channels[], int16_t min, int16_t max);
