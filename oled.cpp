@@ -20,8 +20,33 @@ displayState lastScreen;
 menuMode menuState = MENU_BROWSE;
 
 // Instantiate the U8g2 object. (Rotation R0, No reset pin, SCL pin 6, SDA pin 5)
+#ifdef OLED_OPTION_1
 U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 6, /* data=*/ 5);
+#else
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 6, /* data=*/ 5);
+#endif
 
+// Convert the project's logical 72x40 tile area to the matching area
+// inside this display's 128x64 controller buffer.
+static void updateLogicalDisplayArea(uint8_t logicalTileX,
+                                     uint8_t logicalTileY,
+                                     uint8_t logicalTileW,
+                                     uint8_t logicalTileH) {
+    if (logicalTileW == 0 || logicalTileH == 0) return;
+
+    const int xStart = OLED_X_OFFSET + logicalTileX * 8;
+    const int yStart = OLED_Y_OFFSET + logicalTileY * 8;
+    const int xEnd = OLED_X_OFFSET + (logicalTileX + logicalTileW) * 8 - 1;
+    const int yEnd = OLED_Y_OFFSET + (logicalTileY + logicalTileH) * 8 - 1;
+
+    const uint8_t physicalTileX = xStart / 8;
+    const uint8_t physicalTileY = yStart / 8;
+    const uint8_t physicalTileW = (xEnd / 8) - physicalTileX + 1;
+    const uint8_t physicalTileH = (yEnd / 8) - physicalTileY + 1;
+
+    display.updateDisplayArea(physicalTileX, physicalTileY,
+                              physicalTileW, physicalTileH);
+}
 
 void initDisplay() {
     // Force I2C initialization to use the board's dedicated hardware pins (SDA=5, SCL=6)
@@ -37,13 +62,13 @@ void drawBootLogo() {
     
     // Draw NanoTX logo
     // Parameters: drawXBM(x_start, y_start, width, height, bitmap_array)
-    display.drawXBM(0, 0, 72, 40, nanotx_logo_72x40);
+    display.drawXBM(OLED_X_OFFSET, OLED_Y_OFFSET, 72, 40, nanotx_logo_72x40);
 
     display.setFont(u8g2_font_tiny5duo_tf); 
-    display.setCursor(2, 36);       // X=2, Y=38 bottom-left
+    display.setCursor(OLED_X_OFFSET + 2, OLED_Y_OFFSET + 36);
     display.print("ELRS");
     
-    display.setCursor(50, 36);      // X=50, Y=38 bottom-right
+    display.setCursor(OLED_X_OFFSET + 50, OLED_Y_OFFSET + 36);
     display.print("v1.0");
     
     display.sendBuffer();     
@@ -140,7 +165,11 @@ void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t
 #ifdef TIMINGDEBUG
     processTime = micros() - startTime;
 #endif
+#ifdef OLED_OPTION_1
     if (tileW > 0) display.updateDisplayArea(tileX,tileY,tileW,tileH);
+#else
+    if (tileW > 0) updateLogicalDisplayArea(tileX,tileY,tileW,tileH);
+#endif
 #ifdef TIMINGDEBUG
     transmitTime = micros() - (startTime + processTime);
     Serial.print("Top Half Process Time: "); Serial.print(processTime); Serial.print("uS. Send time: "); Serial.print(transmitTime); Serial.println("uS.");
@@ -211,7 +240,11 @@ void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t
 #ifdef TIMINGDEBUG
     processTime = micros() - startTime;
 #endif
+#ifdef OLED_OPTION_1
     display.updateDisplayArea(tileX,tileY,tileW,tileH);
+#else
+    updateLogicalDisplayArea(tileX,tileY,tileW,tileH);
+#endif
 #ifdef TIMINGDEBUG
     transmitTime = micros() - (startTime + processTime);
 
@@ -898,7 +931,7 @@ void drawMenuScreen(const ParamCollection& menu) {
             display.setCursor(OLED_X_OFFSET + 3, OLED_Y_OFFSET + 12);
             display.print(param.label);
             
-            display.drawFrame(0, 14, 72, 26);        
+            display.drawFrame(OLED_X_OFFSET, OLED_Y_OFFSET + 14, 72, 26);
 
             // Draw navigation arrows
             if (menu.editValue > param.minVal) {   
