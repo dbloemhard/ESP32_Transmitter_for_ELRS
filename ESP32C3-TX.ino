@@ -21,6 +21,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <BleGamepad.h>
 #include "hardware.h"
 #include "config.h"
 #include "crsf.h"
@@ -32,6 +33,11 @@
 
 //----- Handset class contains settings and menu ------
 Handset transmitter;
+
+//----- Bluetooth joystick functionality --------------
+BleGamepad bleGamepad("NanoTX Gamepad", "NanoTX", 100); // Set 100% battery to start with - gets updated below;
+bool btJoystickModeActive = false; // Track whether bt joystick mode is selected or not
+bool bleGamepadBegun = false;      // Track whether we need to start bleGamepad
 
 //----- global variables for inputs -------------------
 int16_t stickValues[7];  // 4 axis of joysticks + 3 aux inputs
@@ -485,7 +491,7 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
     uint8_t expo = transmitter.globalSettings.expo[chIndex];
     uint8_t limit = transmitter.globalSettings.limit[chIndex];
 
-    if (chIndex == THROTTLE && !transmitter.globalSettings.throttleCentered) {
+    if (chIndex == THR && !transmitter.globalSettings.throttleCentered) {
         // Throttle-specific Expo (Curved from 0)
         adcValue = applyThrottleExpo(adcValue, expo);
 
@@ -548,28 +554,28 @@ void mapChannels() {
 
     switch (mode) {
         case 1:
-            rcChannels[AILERON]   = processStick(stickValues[RIGHTX], 0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues[LEFTY],  1);
-            rcChannels[THROTTLE]  = processStick(stickValues[RIGHTY], 2);
-            rcChannels[RUDDER]    = processStick(stickValues[LEFTX],  3); 
+            rcChannels[AIL]   = processStick(stickValues[RIGHTX], 0); 
+            rcChannels[ELE]  = processStick(stickValues[LEFTY],  1);
+            rcChannels[THR]  = processStick(stickValues[RIGHTY], 2);
+            rcChannels[RUD]    = processStick(stickValues[LEFTX],  3); 
             break;
         case 2:
-            rcChannels[AILERON]   = processStick(stickValues[RIGHTX], 0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues[RIGHTY], 1);
-            rcChannels[THROTTLE]  = processStick(stickValues[LEFTY],  2);
-            rcChannels[RUDDER]    = processStick(stickValues[LEFTX],  3); 
+            rcChannels[AIL]   = processStick(stickValues[RIGHTX], 0); 
+            rcChannels[ELE]  = processStick(stickValues[RIGHTY], 1);
+            rcChannels[THR]  = processStick(stickValues[LEFTY],  2);
+            rcChannels[RUD]    = processStick(stickValues[LEFTX],  3); 
             break;
         case 3:
-            rcChannels[AILERON]   = processStick(stickValues[LEFTX],  0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues[LEFTY],  1);
-            rcChannels[THROTTLE]  = processStick(stickValues[RIGHTY], 2);
-            rcChannels[RUDDER]    = processStick(stickValues[RIGHTX], 3); 
+            rcChannels[AIL]   = processStick(stickValues[LEFTX],  0); 
+            rcChannels[ELE]  = processStick(stickValues[LEFTY],  1);
+            rcChannels[THR]  = processStick(stickValues[RIGHTY], 2);
+            rcChannels[RUD]    = processStick(stickValues[RIGHTX], 3); 
             break;
         case 4:
-            rcChannels[AILERON]   = processStick(stickValues[LEFTX],  0); 
-            rcChannels[ELEVATOR]  = processStick(stickValues[RIGHTY], 1);
-            rcChannels[THROTTLE]  = processStick(stickValues[LEFTY],  2);
-            rcChannels[RUDDER]    = processStick(stickValues[RIGHTX], 3); 
+            rcChannels[AIL]   = processStick(stickValues[LEFTX],  0); 
+            rcChannels[ELE]  = processStick(stickValues[RIGHTY], 1);
+            rcChannels[THR]  = processStick(stickValues[LEFTY],  2);
+            rcChannels[RUD]    = processStick(stickValues[RIGHTX], 3); 
             break;
     }
 
@@ -681,11 +687,11 @@ bool checkThrottleIdleTimeout(){
     static uint32_t stickMovedMillis = 0;
 
     // check if throttle stick moved, warning after 5 minutes
-    if(abs(previous_throttle - rcChannels[THROTTLE]) < 30){
+    if(abs(previous_throttle - rcChannels[THR]) < 30){
         stickMoved = 0;
-        //Serial.println(abs(previous_throttle - rcChannels[THROTTLE]));
+        //Serial.println(abs(previous_throttle - rcChannels[THR]));
     }else{
-        previous_throttle = rcChannels[THROTTLE];
+        previous_throttle = rcChannels[THR];
         stickMovedMillis = millis();
         stickMoved = 1;
     }
@@ -767,14 +773,14 @@ void statusDisplay(){
     // If no movement was made, navigate will be zero. Otherwise, Up = 1, Down = 2, Left = 3, Right = 4.
     // Joystick (5) or builtin button (6,7 for short/long press) take precedence over joystick movement
     if (navigate > 0) {  // Navigation has occurred
-        handleNavigation(navigate, transmitter, elrsClass, calibrationRequested);
+        handleNavigation(navigate, transmitter, elrsClass, btJoystickModeActive, calibrationRequested);
         navigate = 0; // Reset navigation
     }
 
     int connectionState = 0;
     uint32_t currentTime = millis();
     static uint32_t lastScreenUpdateTime = 0;
-    uint16_t screenUpdateTime = (ARMED)? 500 : 100; // 2hz while armed, 10hz while disarmed
+    uint16_t screenUpdateTime = (ARMED && !btJoystickModeActive)? 500 : 100; // 2hz while armed (and bluetooth joystick not active), 10hz while disarmed
     if (currentTime - lastScreenUpdateTime >= screenUpdateTime) { 
         lastScreenUpdateTime = currentTime;
         
@@ -782,7 +788,7 @@ void statusDisplay(){
             case MAIN_PAGE:       
                 // 0 = ELRS not connected, 1 = Telemetry Active, 4 = BT Joystick mode
                 connectionState = (crsfClass.telemetryActive) ? 1 : 0;
-                // connectionState = (btJoystickModeActive) ? 4 : connectionState
+                connectionState = (btJoystickModeActive) ? 4 : connectionState;
                 drawHomeScreen(batteryVoltage, connectionState, crsfClass.linkStats.uplinkLQ, stickValues,ADC_MIN,ADC_MAX);
                 break;
             case ELRS_STATS: 
@@ -797,9 +803,9 @@ void statusDisplay(){
             case CHANNEL_MENU: 
                 drawMenuScreen(transmitter.handsetSettingsMenu);
                 break; 
-            // case BT_JOYSTICK: 
-            //     drawBtJoystickScreen();
-            //     break;
+            case BT_JOYSTICK: 
+                drawBtJoystickScreen(btJoystickModeActive);
+                break;
             case MODEL_FINDER: 
                 drawModelFinderScreen(raw,avg,strength);
                 break;
@@ -826,13 +832,13 @@ void logData(){
         Serial.print("Bat:");
         sprintf(buf, "%5.2f", batteryVoltage);
         Serial.print("v Channels AETR: ");
-        sprintf(buf, "%5d", rcChannels[AILERON]);
+        sprintf(buf, "%5d", rcChannels[AIL]);
         Serial.print(buf);
-        sprintf(buf, "%5d", rcChannels[ELEVATOR]);
+        sprintf(buf, "%5d", rcChannels[ELE]);
         Serial.print(buf);
-        sprintf(buf, "%5d", rcChannels[THROTTLE]);
+        sprintf(buf, "%5d", rcChannels[THR]);
         Serial.print(buf);
-        sprintf(buf, "%5d", rcChannels[RUDDER]);
+        sprintf(buf, "%5d", rcChannels[RUD]);
         Serial.print(buf);
         Serial.print(" AUX: ");
         Serial.print(stickValues[SW1]);
@@ -974,23 +980,80 @@ void loop()
         elrsClass.update(currentScreen == ELRS_MENU);       
 
         // --------------------------------
-        // Send RC data to external module
+        // Send RC data to external module / BLE Gamepad
         uint32_t currentMicros = micros();
         if (currentMicros > crsfTime) {
-            // Command packet interleaving
-            if (crsfClass.commandQueue.hasItems()) {
-                crsfClass.crsfSendQueuedCommand();
-            } else {
-                crsfClass.crsfSendChannels(rcChannels);
+            if (btJoystickModeActive) {
+                if (!bleGamepadBegun) {
+                    bleGamepad.begin();
+                    bleGamepadBegun = true;
+                }
+
+                // Send Channel outputs or stick values.... 
+                // Bluetooth HID expects 0 to 32767
+                // int16_t bleLeftX  = map(rcChannels[RUD],   CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX, 0, 32767);
+                // int16_t bleLeftY  = map(rcChannels[THR], CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX, 0, 32767);
+                // int16_t bleRightX = map(rcChannels[AIL],  CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX, 0, 32767);
+                // int16_t bleRightY = map(rcChannels[ELE], CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX, 0, 32767);
+                // // Handle button states directly from stickValues 
+                // if (stickValues[SW1] == 1) bleGamepad.press(BUTTON_1); else bleGamepad.release(BUTTON_1);
+                // if (stickValues[SW2] == 1) bleGamepad.press(BUTTON_2); else bleGamepad.release(BUTTON_2);
+                // if (stickValues[SW3] == 1) bleGamepad.press(BUTTON_3); else bleGamepad.release(BUTTON_3);
+                // bleGamepad.setAxes(bleLeftX, bleLeftY, 0, bleRightX, bleRightY, 0, 0, 0);       //(X, Y, Z, RX, RY, RZ, slider1, slider2)
+
+                int bleLeftX   = map(stickValues[LEFTX],  ADC_MIN, ADC_MAX, 0, 32767);
+                int bleLeftY   = map(stickValues[LEFTY],  ADC_MIN, ADC_MAX, 0, 32767);
+                int bleRightX  = map(stickValues[RIGHTX], ADC_MIN, ADC_MAX, 0, 32767);
+                int bleRightY  = map(stickValues[RIGHTY], ADC_MIN, ADC_MAX, 0, 32767);
+                int bleLeftZ   = (stickValues[SW1] == 1) ? 32767 : 0;
+                int bleRightZ  = (stickValues[SW2] == 1) ? 32767 : 0;
+                int slider1    = (stickValues[SW3] == 1) ? 32767 : 0;
+                bleGamepad.setAxes(bleLeftX, bleLeftY, bleLeftZ, bleRightX, bleRightY, bleRightZ, slider1, 0);       //(X, Y, Z, RX, RY, RZ, slider1, slider2)
+
+                if (batteryVoltage > 4.1) {
+                    bleGamepad.setBatteryLevel(100);
+                } else if (batteryVoltage > 3.9) {
+                    bleGamepad.setBatteryLevel(80);                    
+                } else if (batteryVoltage > 3.8) {
+                    bleGamepad.setBatteryLevel(60);                    
+                } else if (batteryVoltage > 3.7) {
+                    bleGamepad.setBatteryLevel(40);                    
+                } else if (batteryVoltage > 3.6) {
+                    bleGamepad.setBatteryLevel(20);                    
+                } else if (batteryVoltage > 3.5) {
+                    bleGamepad.setBatteryLevel(10);                    
+                } else if (batteryVoltage > 3.4) {
+                    bleGamepad.setBatteryLevel(1);                    
+                } else if (batteryVoltage > ON_USB) {
+                    bleGamepad.setBatteryLevel(80);                    
+                } else { // On USB
+                    bleGamepad.setBatteryLevel(100);                    
+                }
+
+                crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US; // default to 500hz as defined in crsf.h
             }
+            else {
+                if (bleGamepadBegun) {
+                    crsfClass.commandQueue.clear();  // Clear out any queued up commands (device pings may queue up during BLE usage)
+                    Serial.flush();  // Clear out the queued up serial output too
+                    bleGamepad.end();
+                    bleGamepadBegun = false;
+                }                
+                // Command packet interleaving
+                if (crsfClass.commandQueue.hasItems()) {
+                    crsfClass.crsfSendQueuedCommand();
+                } else {
+                    crsfClass.crsfSendChannels(rcChannels);
+                }
 
 #ifdef TIMINGDEBUG
-            uint32_t elrsTime = micros() - currentMicros;
-            if (elrsTime > maxElrsTime) maxElrsTime = elrsTime;
-            if (elrsTime < minElrsTime) minElrsTime = elrsTime;
+                uint32_t elrsTime = micros() - currentMicros;
+                if (elrsTime > maxElrsTime) maxElrsTime = elrsTime;
+                if (elrsTime < minElrsTime) minElrsTime = elrsTime;
 #endif
-            uint32_t adjustment = crsfClass.crsfNextInterval();
-            crsfTime = currentMicros + adjustment; //CRSF_TIME_BETWEEN_FRAMES_US;
+                uint32_t adjustment = crsfClass.crsfNextInterval();
+                crsfTime = currentMicros + adjustment; //CRSF_TIME_BETWEEN_FRAMES_US;
+            }
 #ifdef DEBUG
             if (millis() - lastSyncPrintTime > 2000) {
                 Serial.println("\n============ [Loop timing] ============");

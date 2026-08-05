@@ -67,7 +67,7 @@ void Handset::loadGlobalSettings(bool initialize) {
         addFolder(idx, 0, folderLabels[ch]);
         idx++;
 
-        if (ch == THROTTLE) { // Throttle-specific settings
+        if (ch == THR) { // Throttle-specific settings
             // 0. Throttle Channel middle center
             globalSettings.throttleCentered = configPrefs.getBool("Center Throt", false);  // Default standard quad throttle
             addChoiceParam(idx, currentFolderID, "Center Throt", {"No","Yes"}, globalSettings.throttleCentered, 0, 1);

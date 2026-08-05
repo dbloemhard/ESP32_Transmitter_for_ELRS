@@ -157,6 +157,14 @@ public:
         _tail = (_tail + 1) & _mask; // Atomic index advance
         return true;
     }
+
+    // Clear routine to be called to prevent commands being queued up during bluetooth operation
+    void clear() {
+       noInterrupts(); // Disable interrupts
+       _head = 0;
+       _tail = 0;
+       interrupts();   // Re-enable interrupts
+    }    
 };
 
 

@@ -59,8 +59,7 @@ static void updateLogicalDisplayArea(uint8_t logicalTileX, uint8_t logicalTileY,
 void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue);
 void drawElrsStatsScreen(const ELRS& elrs);
 void drawChannelOutputsScreen(int16_t channels[], int16_t min, int16_t max);
-void drawBtJoystickScreen();
-void drawBtTxScreen();
+void drawBtJoystickScreen(bool btJoystickActive);
 
 void drawCalibrationScreen(int stage, int secondsLeft);
 
@@ -73,7 +72,7 @@ void animateEditValue(const ParamCollection& menu);
 void drawScrollingPopupText(const char* text, int textX, int textY, int displayAreaWidth);
 void drawPopup(const ParamCollection& menu);
 int  navigateMenu(ParamCollection &menu, uint8_t direction);
-void handleNavigation(int navigate, Handset& handset, ELRS& elrs, bool& startCalibration );
+void handleNavigation(int navigate, Handset& handset, ELRS& elrs, bool& toggleBtJoystick, bool& startCalibration );
 void drawModelFinderScreen(int raw, int avg, int strength);
 
 void drawMessage(char title[], char line1[], char line2[]);

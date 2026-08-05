@@ -83,11 +83,11 @@ void nextScreen() {
     switch (currentScreen) {
         case MAIN_PAGE:       currentScreen = ELRS_STATS;      break;
         case ELRS_STATS:      currentScreen = CHANNEL_OUTPUTS; break;
-        case CHANNEL_OUTPUTS: currentScreen = MODEL_FINDER;    break;
+        case CHANNEL_OUTPUTS: currentScreen = BT_JOYSTICK;     break;
+        case BT_JOYSTICK:     currentScreen = MODEL_FINDER;    break;
         case MODEL_FINDER:    currentScreen = MAIN_PAGE;       break; // Wrap around
     }
 }
-
 
 void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t channels[],int16_t minChannelValue,int16_t maxChannelValue) {
     static int lastVoltageX10 = -99;
@@ -126,7 +126,7 @@ void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t
     // 2. TOP RIGHT QUADRANT: LARGE SIGNAL BARS
     // ==========================================
     uint8_t bars = 0;
-    if (telemetryState == 1 || telemetryState == 3) {
+    if (telemetryState == 1) {
         if (uplinkLQ > 75) bars = 4;
         else if (uplinkLQ > 50) bars = 3;
         else if (uplinkLQ > 25) bars = 2;
@@ -137,12 +137,13 @@ void drawHomeScreen(float voltage, int telemetryState, uint8_t uplinkLQ, int16_t
         if (bars >= 2) display.drawBox(52 + OLED_X_OFFSET, 8 + OLED_Y_OFFSET,  3, 6);   // Bar 2
         if (bars >= 3) display.drawBox(59 + OLED_X_OFFSET, 4 + OLED_Y_OFFSET,  3, 10);  // Bar 3
         if (bars >= 4) display.drawBox(66 + OLED_X_OFFSET, 0 + OLED_Y_OFFSET,  3, 14);  // Bar 4 (Tallest)
-    } else if (telemetryState == 0 || telemetryState == 2) {
+    } else if (telemetryState == 0) {
         display.drawBox(47 + OLED_X_OFFSET, 6 + OLED_Y_OFFSET, 8, 2); // display -- to indicate not connected
         display.drawBox(59 + OLED_X_OFFSET, 6 + OLED_Y_OFFSET, 8, 2);
-        // tbd display NC when ELRS module not detected
-    } else if (telemetryState == 5) { // Bluetooth Joystick mode
+    } else if (telemetryState == 4) { // Bluetooth Joystick mode
         // Draw bluetooth logo
+        display.setFont(u8g2_font_open_iconic_embedded_2x_t); 
+        display.drawStr(OLED_X_OFFSET + 47, OLED_Y_OFFSET + 16, "J");
     }
     if (telemetryState == 2 || telemetryState == 3) { // Bluetooth transmitter mode
         // Draw small bluetooth logo in top-left of ELRS signal area
@@ -337,6 +338,23 @@ void drawChannelOutputsScreen(int16_t channels[], int16_t min, int16_t max) {
             display.drawBox(currentX, y - 1, midX - currentX + 1, barHeight);
         }
     }
+    display.sendBuffer();
+    lastScreen = currentScreen;
+}
+
+void drawBtJoystickScreen(bool btJoystickActive) {
+    display.clearBuffer();
+    display.setFont(u8g2_font_open_iconic_embedded_2x_t); 
+    display.drawStr(OLED_X_OFFSET + (OLED_WIDTH/2) - 16, OLED_Y_OFFSET + (OLED_HEIGHT/2) + 12, "J");
+
+    display.setFont(u8g2_font_squeezed_b7_tr); 
+    display.drawStr(OLED_X_OFFSET + 12, OLED_Y_OFFSET + 8, "BLE Joystick");
+    if (btJoystickActive) {
+        display.drawStr(OLED_X_OFFSET + (OLED_WIDTH/2) + 10, OLED_Y_OFFSET + (OLED_HEIGHT/2) + 8, "ON");
+    } else {
+        display.drawStr(OLED_X_OFFSET + (OLED_WIDTH/2) + 10, OLED_Y_OFFSET + (OLED_HEIGHT/2) + 8, "OFF");
+    }
+
     display.sendBuffer();
     lastScreen = currentScreen;
 }
@@ -843,7 +861,7 @@ int navigateMenu(ParamCollection &menu, uint8_t direction) {
 }
 
 
-void handleNavigation(int navigate, Handset& handset, ELRS& elrs, bool& startCalibration ) {
+void handleNavigation(int navigate, Handset& handset, ELRS& elrs, bool& toggleBtJoystick, bool& startCalibration ) {
     // 0 = No move/button
     // 1 = Up
     // 2 = Down
@@ -866,7 +884,7 @@ void handleNavigation(int navigate, Handset& handset, ELRS& elrs, bool& startCal
                 currentScreen = CHANNEL_MENU;
                 break;
             case BT_JOYSTICK: 
-                //startBtJoystick();
+                toggleBtJoystick = !toggleBtJoystick;
                 //currentScreen = MAIN_PAGE;
                 break;
             // Ignore long press builtin button in ELRS_MENU & CHANNEL_MENU & MODEL_FINDER

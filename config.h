@@ -63,10 +63,10 @@
 #define FILTER_SHIFT 3
 
 enum ChannelOrder {
-    AILERON,
-    ELEVATOR,
-    THROTTLE,
-    RUDDER,
+    AIL,
+    ELE,
+    THR,
+    RUD,
     AUX1, // (CH5)  ARM switch for Expresslrs
     AUX2, // (CH6)  angel / airmode change
     AUX3, // (CH7)  flip after crash

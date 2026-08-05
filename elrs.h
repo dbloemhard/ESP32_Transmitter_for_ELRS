@@ -142,7 +142,6 @@ public:
     void editParamSave();       // Save the selected parameter with the edit value
     void executeCommand();      // Execute, or Confirm the current command parameter
     void cancelCommand();       // Cancel the current command parameter
-    // void executeParamCommand();
 
 private:
     CRSF& crsf;  // Reference link to the CRSF instance
