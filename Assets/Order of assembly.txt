@@ -6,7 +6,7 @@ Go to https://expresslrs.github.io/web-flasher/ and select Receiver.
 Follow normal instructions, most this size will be the Betafpv Nano 2.4Ghz FW
 On the Options screen, select Advanced and select "Flash RX as a TX (full duplex internal module only)
 Follow other flashing options as normal.
-b. Next flash the ESP32 with my firmware. This is coded in Arduino studio so you will need that, as well as the ESP32 library, U8G2 library.
+b. Next flash the ESP32 with my firmware. This is coded in Arduino studio so you will need that, as well as the ESP32 boards, U8G2 library, and bleGamepad library.
 c. Solder the parts together.
 --------------------
 1. Mock up gimbal distances to know how long to trim the wires before attaching to the ESP32
