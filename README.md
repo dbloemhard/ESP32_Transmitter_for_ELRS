@@ -21,16 +21,17 @@ The radio works, I'm happy with it, but i am sure there will be things that need
 - Up to 500Hz packet rate. Possibly even FLRC 1000hz? Who even uses that...
 - 4 analog channels
 - 3 AUX channels selectable via joystick button presses (left joystick button toggles Arm, right joystick button toggles channel 6, long press for channel 7)
+- BLE Joystick functionality with lower latency than using the ELRS module BLE joystick mode
 
 Current STL is basic, and a tight fit. Make sure all wires are as short as needed, trim as necessary. I will be designing a PCB board you can order from PCBWay or whatever that will make building this a 15 minute job. But for now its manual wiring. 
 
 Currently wishlist/code tasks:
-* Bluetooth joystick using ESP32-BLE-Gamepad library (RX as a TX does not suport BLE Joystick so need to implement it myself)
 * Multitask the OLED updates to free up more time for the ELRS code
 
 Programmed in Arduino IDE with love and a some AI suggestions (found myself rewriting everything it did). 
 1. Install the ESP32 Boards via board manager
 2. Install the U8g2 library by Oliver
+3. Install bleGamepad library by LemmingDev (search for lemmingdev - it will prompt to install dependent NimBLE library).
 3. then select ESP32C3 Dev Module board, and select the COM port your ESP32 is connected to
 3. Set USB CDC On Boot "Enabled"
 4. Build and upload.
