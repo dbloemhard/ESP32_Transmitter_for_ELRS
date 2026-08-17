@@ -46,14 +46,16 @@ Once the programming completes, you will need to reboot the ESP32 yourself (unpl
 https://www.youtube.com/watch?v=7jazVEKMIew
 
 # Parts list:
-* ESP32 C3 with Oled https://ja.aliexpress.com/item/1005009157602185.html
-* PS5 Joysticks https://ja.aliexpress.com/item/1005006282848536.html
-* Nano receiver to be used as TX module https://ja.aliexpress.com/item/1005010228737836.html?
+* ESP32 C3 with 0.42" Oled https://ja.aliexpress.com/item/1005009157602185.html (or similar)
+* PS5 Joysticks https://ja.aliexpress.com/item/1005006282848536.html (or similar)
+* Nano receiver to be used as TX module https://ja.aliexpress.com/item/1005010228737836.html (or similar)
 * 5V boost converter: https://ja.aliexpress.com/item/1005011803028198.html
 * M1.2 x 6mm self tapping screws https://ja.aliexpress.com/item/1005008724193768.html
 * Two resistors for a voltage divider circuit https://ja.aliexpress.com/item/1005009412772665.html (10k and 20k OR 15k and 30k OR 16k and 33k)
 * AWG 32 or 30 Silicone wires in lots of colors (recommend 10 different colors) https://ja.aliexpress.com/item/4000485605478.html
-* Battery pigtail with BT2.0 plug (10cm long), and a 3D printed case (joystick covers can be printed or bought)
+* Joystick caps can be printed or bought. https://ja.aliexpress.com/item/1005006734634193.html - I bought mine from Amazon Japan, and looking at these pics it looks like I got the PS4 version, but they both fit.
+* If you are like me, and need stick ends, then print the joystick caps with a thread hole for M2 sticks instead. The DJI RC 3 stick ends are perfect, but not available aftermarket and USD$10 seems rich for this project. I confirmed that these aftermarket DJI RC Pro stick ends work with my printed caps https://ja.aliexpress.com/item/1005004437467902.html (Color: for DJI RC PRO). They are slightly shorter than the RC 3 stick ends but work fine. I also included an STL for threaded inserts, so you could use an M3 insert and use Radiomaster Pocket stick ends too.
+* Battery pigtail with BT2.0 plug (10cm long), and of course the 3D printed case.
 Total cost is around $15-20
 
 Based on work by kkbin505 with his SimpleTX project, but is now almost completely rewritten, 90% by hand (LLMs only used for code suggestions)
