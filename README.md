@@ -7,10 +7,12 @@ Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an
 
 I have rewritten it to run on an ESP32 C3 module with an OLED screen that you can buy on Aliexpress for a few dollars. This is small enough to make my earlier TinyTX project even smaller, and it has a built in OLED screen as well! I am now reading telemetry from the ELRS module and implemented the full ELRS Lua script for configuring ELRS as well as the handset.
 
-# THIS IS STILL BEING CODED - Check back for new updates
+# This is an active repository! Code and assets are being improved still.
 https://youtube.com/shorts/-rPwNI36CTY?feature=share
 
-The radio works, I'm happy with it, but i am sure there will be things that need fixing or improving. Version 3 of the 3D print finally fits everything and can be screwed together using m1.2x6 whoop canopy screws. From here on in its mainly going to be code bug fixes, and maybe i'll come up with another 3d print design.
+The radio works, and I'm really happy with it. But i am sure there will be things that need fixing or improving. PCB now makes building it super easy, and the 3D print is as small as i can make it, yet still useable. I would like to investigate ideas for folding arms or something to make it more comfortable, but designing things is hard. The STEP files are there for anyone who has those skills!
+
+Code wise, from here on in its mainly going to be code bug fixes or if anyone has ideas for cool new features (that dont take away from the simplicity of the UI).
 
 # Features:
 - Fits in your pocket. Not like the Radio Master Pocket which will get you funny looks... Actually pocketable.
@@ -23,10 +25,22 @@ The radio works, I'm happy with it, but i am sure there will be things that need
 - 3 AUX channels selectable via joystick button presses (left joystick button toggles Arm, right joystick button toggles channel 6, long press for channel 7)
 - BLE Joystick functionality with lower latency than using the ELRS module BLE joystick mode
 
-Current STL is basic, and a tight fit. Make sure all wires are as short as needed, trim as necessary. I will be designing a PCB board you can order from PCBWay or whatever that will make building this a 15 minute job. But for now its manual wiring. 
+There are two options for building right now. The original wires from the joysticks to the pads of the ESP32, and also a PCB which significantly simplifies the build process/time. If you are building with wires, be aware that it is a tight fit. Make sure all wires are as short as needed, trim as necessary. Unless you have an aversion to ordering PCBs from PCBWay or JLCPCB, i would recommend building the PCB version. Its not that hard to order the PCB!
 
-Currently wishlist/code tasks:
+<img width="640" height="480" alt="NanoTX Wires" src="https://github.com/user-attachments/assets/69b67622-38b9-40f4-b30d-4648a2c352c3" />
+
+Or
+
+<img width="640" height="480" alt="Nanotx PCB build" src="https://github.com/user-attachments/assets/9993a44b-5df4-4ddb-ba1a-ce873fd4ef58" />
+
+<img width="552" height="272" alt="NanoTX PCB" src="https://github.com/user-attachments/assets/5690c300-ebbb-41e8-9829-f7d74fd2bccd" />
+
+
+
+# Currently wishlist/code tasks:
 * Multitask the OLED updates to free up more time for the ELRS code
+* Passthrough access to update the ELRS transmitter through USB
+
 
 Programmed in Arduino IDE with love and a some AI suggestions (found myself rewriting everything it did). 
 1. Install the ESP32 Boards via board manager
@@ -42,7 +56,7 @@ Change Flash Address to 0x0000, and press Choose File and selet ESP32C3-TX.bin f
 Leave other options default, then click Program
 Once the programming completes, you will need to reboot the ESP32 yourself (unplug and replug, as it doesnt seem to reset like it states in the programmer output window...)
 
-# Full Build Video
+# Full Build Video (wired build)
 https://www.youtube.com/watch?v=7jazVEKMIew
 
 # Parts list:
