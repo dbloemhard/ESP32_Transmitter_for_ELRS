@@ -63,7 +63,8 @@ https://www.youtube.com/watch?v=7jazVEKMIew
 * ESP32 C3 with 0.42" Oled https://ja.aliexpress.com/item/1005009157602185.html (or similar)
 * PS5 Joysticks https://ja.aliexpress.com/item/1005006282848536.html (or similar)
 * Nano receiver to be used as TX module https://ja.aliexpress.com/item/1005010228737836.html (or similar)
-* 5V boost converter: https://ja.aliexpress.com/item/1005011803028198.html
+* 5V boost converter: ~~https://ja.aliexpress.com/item/1005011803028198.html~~ <- I can no longer recommend this. This regulator causes noise to get into the ESP32 which leads to eratic gimbal/voltage readings. If you have already built with this I apologise, it looked good on paper...
+* I replaced the VREG above with this one https://ja.aliexpress.com/item/1005009770893985.html (the red PCB version). It just fits in the gap between the ELRS RX and ESP32. Still looking for a better (smaller) one that will fit...
 * M1.2 x 6mm self tapping screws https://ja.aliexpress.com/item/1005008724193768.html
 * Two resistors for a voltage divider circuit https://ja.aliexpress.com/item/1005009412772665.html (10k and 20k OR 15k and 30k OR 16k and 33k)
 * AWG 32 or 30 Silicone wires in lots of colors (recommend 10 different colors) https://ja.aliexpress.com/item/4000485605478.html
