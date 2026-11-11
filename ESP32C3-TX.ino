@@ -586,6 +586,10 @@ void mapChannels() {
             rcChannels[RUD]  = processStick(stickValues[RIGHTX], RUD); 
             break;
         case 4:
+            // Tank mixer implemented on the never-used Stick Mode 4. 
+            // Mixer function takes 2 channels, with a weight value. Standard tank mix has Throttle + Steering on left track and Throttle - Steering on right track
+            // I am using the right stick for throttle and steering, since i want it centered for reversing. 
+            // Receiver has left track on Channel 1 and right track on Channel 2
             rcChannels[AIL]  = mixChannels(processStick(stickValues[RIGHTX], AIL), 100, processStick(stickValues[RIGHTY], ELE), 100); 
             rcChannels[ELE]  = mixChannels(processStick(stickValues[RIGHTX], AIL), -100, processStick(stickValues[RIGHTY], ELE), 100); 
             rcChannels[THR]  = processStick(stickValues[LEFTY], THR);
