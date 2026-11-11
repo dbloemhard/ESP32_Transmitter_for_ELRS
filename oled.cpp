@@ -55,6 +55,7 @@ void initDisplay() {
     display.begin();
     display.setContrast(255);
     display.setBusClock(800000); // 400kHz fast I2C mode
+    //display.setFlipMode(1);
 }
 
 void drawBootLogo() {

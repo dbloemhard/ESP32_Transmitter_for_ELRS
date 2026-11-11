@@ -537,7 +537,7 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
 
         // Map to CRSF Range and center it on 992
         int32_t crsfScaled = (stickCentered * 820) >> 10;
-        crsfOutput = crsfScaled + 992;
+        crsfOutput = crsfScaled + CRSF_DIGITAL_CHANNEL_MID;
     }
 
     if (crsfOutput < CRSF_DIGITAL_CHANNEL_MIN) crsfOutput = CRSF_DIGITAL_CHANNEL_MIN;
@@ -546,6 +546,20 @@ uint16_t processStick(int32_t adcValue, uint8_t chIndex) {
     return (uint16_t)crsfOutput;
 }
 
+uint16_t mixChannels(int16_t ch1, int8_t ch1Weight = 100, int16_t ch2 = 0, int8_t ch2Weight = 0) {
+    if (ch2Weight == 0){
+        return ch1;
+    }
+
+    int32_t channel1 = -(ch1 - CRSF_DIGITAL_CHANNEL_MID);
+    int32_t channel2 = -(ch2 - CRSF_DIGITAL_CHANNEL_MID);
+    
+    int32_t mixedChannel = (channel1 * (ch1Weight/100)) + (channel2 * (ch2Weight/100));
+
+    mixedChannel = constrain(mixedChannel+CRSF_DIGITAL_CHANNEL_MID, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
+
+    return mixedChannel;
+}
 
 // Map stick values into traditional standard CRSF channel microsecond positions (1000us to 2000us)
 void mapChannels() {
@@ -554,28 +568,32 @@ void mapChannels() {
 
     switch (mode) {
         case 1:
-            rcChannels[AIL]   = processStick(stickValues[RIGHTX], 0); 
-            rcChannels[ELE]  = processStick(stickValues[LEFTY],  1);
-            rcChannels[THR]  = processStick(stickValues[RIGHTY], 2);
-            rcChannels[RUD]    = processStick(stickValues[LEFTX],  3); 
+            rcChannels[AIL]  = processStick(stickValues[RIGHTX], AIL); 
+            rcChannels[ELE]  = processStick(stickValues[LEFTY],  ELE);
+            rcChannels[THR]  = processStick(stickValues[RIGHTY], THR);
+            rcChannels[RUD]  = processStick(stickValues[LEFTX],  RUD); 
             break;
         case 2:
-            rcChannels[AIL]   = processStick(stickValues[RIGHTX], 0); 
-            rcChannels[ELE]  = processStick(stickValues[RIGHTY], 1);
-            rcChannels[THR]  = processStick(stickValues[LEFTY],  2);
-            rcChannels[RUD]    = processStick(stickValues[LEFTX],  3); 
+            rcChannels[AIL]  = processStick(stickValues[RIGHTX], AIL); 
+            rcChannels[ELE]  = processStick(stickValues[RIGHTY], ELE);
+            rcChannels[THR]  = processStick(stickValues[LEFTY],  THR);
+            rcChannels[RUD]  = processStick(stickValues[LEFTX],  RUD); 
             break;
         case 3:
-            rcChannels[AIL]   = processStick(stickValues[LEFTX],  0); 
-            rcChannels[ELE]  = processStick(stickValues[LEFTY],  1);
-            rcChannels[THR]  = processStick(stickValues[RIGHTY], 2);
-            rcChannels[RUD]    = processStick(stickValues[RIGHTX], 3); 
+            rcChannels[AIL]  = processStick(stickValues[LEFTX],  AIL); 
+            rcChannels[ELE]  = processStick(stickValues[LEFTY],  ELE);
+            rcChannels[THR]  = processStick(stickValues[RIGHTY], THR);
+            rcChannels[RUD]  = processStick(stickValues[RIGHTX], RUD); 
             break;
         case 4:
-            rcChannels[AIL]   = processStick(stickValues[LEFTX],  0); 
-            rcChannels[ELE]  = processStick(stickValues[RIGHTY], 1);
-            rcChannels[THR]  = processStick(stickValues[LEFTY],  2);
-            rcChannels[RUD]    = processStick(stickValues[RIGHTX], 3); 
+            rcChannels[AIL]  = mixChannels(processStick(stickValues[RIGHTX], AIL), 100, processStick(stickValues[RIGHTY], ELE), 100); 
+            rcChannels[ELE]  = mixChannels(processStick(stickValues[RIGHTX], AIL), -100, processStick(stickValues[RIGHTY], ELE), 100); 
+            rcChannels[THR]  = processStick(stickValues[LEFTY], THR);
+            rcChannels[RUD]  = processStick(stickValues[LEFTX], RUD); 
+            // rcChannels[AIL]  = processStick(stickValues[LEFTX],  0); 
+            // rcChannels[ELE]  = processStick(stickValues[RIGHTY], 1);
+            // rcChannels[THR]  = processStick(stickValues[LEFTY],  2);
+            // rcChannels[RUD]  = processStick(stickValues[RIGHTX], 3); 
             break;
     }
 
